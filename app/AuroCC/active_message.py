@@ -12,7 +12,16 @@ class ActiveMessageHandler:
         )
     async def check_and_send_message(self, user_id):
         memory = MemoryStore(user_id)
-        last_msgs = memory.get_memories(limit=3)
+        # 获取不重复的最后3条消息
+        last_msgs = []
+        seen_msgs = set()
+        for mem in reversed(memory.get_memories(limit=5)):
+            if mem["content"] not in seen_msgs:
+                last_msgs.append(mem)
+                seen_msgs.add(mem["content"])
+            if len(last_msgs) >= 3:
+                break
+        last_msgs = list(reversed(last_msgs))
         
         # 决策是否发送消息
         decision = await self._should_send_message(last_msgs)

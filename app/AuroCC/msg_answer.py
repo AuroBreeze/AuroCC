@@ -23,6 +23,7 @@ class Answer_api:
         self.websocket = websocket
         self.user_id = str(message.get('message_sender_id'))
         self.memory = MemoryStore(self.user_id)
+        self.message_buffer = {}  # 用户ID: {"parts": [], "last_time": timestamp}
         
         try:
             with open("_config.yml", "r", encoding="utf-8") as f:
@@ -32,12 +33,51 @@ class Answer_api:
         
     async def msg_answer_api(self):
         msg = self.Processed_data["message_content"]
+        current_time = datetime.now()
         
+        # 初始化用户缓冲区
+        if self.user_id not in self.message_buffer:
+            self.message_buffer[self.user_id] = {
+                "parts": [],
+                "last_time": current_time
+            }
+        
+        buffer = self.message_buffer[self.user_id]
+        buffer["parts"].append(msg)
+        buffer["last_time"] = current_time
+        
+        # 检查是否应该处理消息(3秒无新消息或消息明显完整)
+        should_process = False
+        if (current_time - buffer["last_time"]).total_seconds() > 3:
+            should_process = True
+        elif any(p.endswith(('。','！','？')) for p in buffer["parts"]):
+            should_process = True
+            
+        if not should_process:
+            return
+            
+        # 合并分片消息
+        msg = " ".join(buffer["parts"])
+        del self.message_buffer[self.user_id]
+            
+        # 检查是否已回复过相同内容
+        last_ai_msg = self.memory.get_memories("ai_msg", limit=1)
+        if last_ai_msg and msg in last_ai_msg[0].get("content", ""):
+            return
+            
         # 保存用户消息
         self.memory.add_memory("user_msg", {"content": msg})
         
-        # 获取最近对话上下文
-        context = self.memory.get_memories(limit=5)
+        # 获取最近对话上下文 (排除合并消息中的重复内容)
+        context = []
+        seen_msgs = set()
+        for mem in reversed(self.memory.get_memories(limit=10)):
+            if mem["content"] not in seen_msgs:
+                context.append(mem)
+                seen_msgs.add(mem["content"])
+            if len(context) >= 5:
+                break
+        context = list(reversed(context))
         prompt = GF_PROMPT.format(context=json.dumps(context, ensure_ascii=False))
         
         # 调用DeepSeek API
@@ -76,5 +116,3 @@ class Answer_api:
                 if self.message.get("target_id") == self.yml["basic_settings"]["QQbot_admin_account"]:
                     return True
         return False
-        
-
