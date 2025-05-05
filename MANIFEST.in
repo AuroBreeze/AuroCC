@@ -1,0 +1,4 @@
+include *.yml
+include *.md
+include *.txt
+recursive-include json *.json

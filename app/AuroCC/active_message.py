@@ -10,7 +10,6 @@ class ActiveMessageHandler:
             api_key="sk-8128daf7c488470bb1efce2b405a7572",
             base_url="https://api.deepseek.com"
         )
-        
     async def check_and_send_message(self, user_id):
         memory = MemoryStore(user_id)
         last_msgs = memory.get_memories(limit=3)
