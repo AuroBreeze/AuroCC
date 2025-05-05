@@ -1,0 +1,29 @@
+{
+    "self_id": 3552638520,
+    "user_id": 1732373074,
+    "time": 1746449334,
+    "message_id": 3422699,
+    "message_seq": 3422699,
+    "real_id": 3422699,
+    "real_seq": "86",
+    "message_type": "private",
+    "sender": {
+        "user_id": 1732373074,
+        "nickname": "C-C（x_x；）",
+        "card": ""
+    },
+    "raw_message": "123",
+    "font": 14,
+    "sub_type": "friend",
+    "message": [
+        {
+            "type": "text",
+            "data": {
+                "text": "123"
+            }
+        }
+    ],
+    "message_format": "array",
+    "post_type": "message",
+    "target_id": 1732373074
+}
