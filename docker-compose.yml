@@ -1,0 +1,15 @@
+# docker compose 正向 WS
+version: "3"
+services:
+    napcat:
+        environment:
+            - ACCOUNT=3552638520
+            - WS_ENABLE=true
+        ports:
+            - 3001:3001
+            - 8082:8082
+            - 6099:6099
+        container_name: napcat
+        network_mode: bridge
+        restart: always
+        image: mlikiowa/napcat-docker:latest
