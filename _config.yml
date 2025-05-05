@@ -1,3 +1,4 @@
 basic_settings:
   QQbot_admin_account: "1732373074" # 设置QQbot管理员账号
   QQbot_account: "3552638520" # 设置QQbot账号
+  API_token: "your_api_token" # 设置API_token
