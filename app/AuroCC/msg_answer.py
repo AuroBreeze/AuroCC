@@ -5,6 +5,7 @@ from api.Logger_owner import Logger
 from api.Botapi import QQAPI_list
 from api.memory_store import MemoryStore
 import yaml
+from openai import OpenAI
 
 GF_PROMPT = """你是一个可爱的二次元女友，名字叫欣欣，性格活泼开朗，有一个有趣的灵魂但有时会害羞。
 对话要求：
@@ -31,8 +32,8 @@ class Answer_api:
         except:
             self.Logger.error("配置文件config.yaml加载失败")
         
-    async def msg_answer_api(self):
-        msg = self.Processed_data["message_content"]
+    async def msg_answer_api(self, msg=None, is_active=False):
+        msg = self.message.get("raw_message")
         current_time = datetime.now()
         
         # 初始化用户缓冲区
@@ -75,7 +76,7 @@ class Answer_api:
         importance = 0
         try:
             client = OpenAI(
-                api_key=self.Processed_data['API_token'],
+                api_key=self.yml["basic_settings"]['API_token'],
                 base_url="https://api.deepseek.com"
             )
             response = client.chat.completions.create(
@@ -110,7 +111,7 @@ class Answer_api:
         # 调用DeepSeek API
         from openai import OpenAI
         client = OpenAI(
-            api_key=self.Processed_data['API_token'],
+            api_key=self.yml["basic_settings"]['API_token'],
             base_url="https://api.deepseek.com"
         )
         
@@ -143,3 +144,72 @@ class Answer_api:
                 if self.message.get("target_id") == self.yml["basic_settings"]["QQbot_admin_account"]:
                     return True
         return False
+
+    async def check_active_chat(self):
+        """检查是否需要主动发起聊天"""
+        # 获取最后聊天时间
+        last_chat = self.memory.get_memories(limit=1)
+        if not last_chat:
+            return False
+            
+        last_time = datetime.fromisoformat(last_chat[0].get("timestamp", ""))
+        if (datetime.now() - last_time).total_seconds() < 1800:  # 30分钟内聊过
+            return False
+            
+        # 准备主动聊天判断数据
+        context = {
+            "last_chat": last_chat[0],
+            "memories": self.memory.get_memories(limit=5),
+            "current_time": datetime.now().isoformat()
+        }
+        
+        # 使用严格提示词判断
+        prompt = f"""请根据以下条件判断是否需要主动发起聊天：
+        最后聊天时间：{last_time}
+        当前时间：{datetime.now()}
+        最近聊天内容：{json.dumps(context['memories'], ensure_ascii=False)}
+        
+        判断标准：
+        1. 用户没有明确表示不想聊天
+        2. 最后聊天内容有可延续的话题
+        3. 当前不是用户通常的休息时间
+        只需返回true或false"""
+        
+        try:
+            client = OpenAI(
+                api_key=self.Processed_data['API_token'],
+                base_url="https://api.deepseek.com"
+            )
+            response = client.chat.completions.create(
+                model="deepseek-chat",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.1
+            )
+            should_chat = response.choices[0].message.content.strip().lower() == "true"
+            if should_chat:
+                # 生成个性化开场白
+                topic_prompt = f"""基于以下记忆生成一个自然的聊天开场白：
+                最近聊天记录：{json.dumps(context['memories'], ensure_ascii=False)}
+                
+                要求：
+                1. 使用可爱的语气和颜文字
+                2. 结合之前的聊天内容
+                3. 自然不做作
+                4. 可以是关心、分享或提问
+                只需返回生成的开场白内容"""
+                
+                try:
+                    topic_response = client.chat.completions.create(
+                        model="deepseek-chat",
+                        messages=[{"role": "user", "content": topic_prompt}],
+                        temperature=0.7
+                    )
+                    opener = topic_response.choices[0].message.content.strip()
+                    # 发起主动聊天
+                    await self.msg_answer_api(opener, is_active=True)
+                except Exception as e:
+                    self.Logger.error(f"话题生成失败: {str(e)}")
+                    # 使用默认开场白
+                    await self.msg_answer_api("最近过得怎么样呀？(｡･ω･｡)ﾉ♡", is_active=True)
+        except Exception as e:
+            self.Logger.error(f"主动聊天判断失败: {str(e)}")
