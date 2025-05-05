@@ -1,3 +1,7 @@
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
 import aiohttp
 import json
 from datetime import datetime, timedelta
@@ -7,6 +11,7 @@ from api.memory_store import MemoryStore
 import yaml
 from openai import OpenAI
 import random
+import json
 
 GF_PROMPT = """你是一个可爱的二次元女友，名字叫欣欣，性格活泼开朗，有一个有趣的灵魂但有时会害羞。
 对话要求：
@@ -14,6 +19,8 @@ GF_PROMPT = """你是一个可爱的二次元女友，名字叫欣欣，性格�
 2. 适当关心用户的生活
 3. 记住重要的对话内容
 4. 偶尔主动分享自己的生活
+5. 不要叫主人什么的词语
+6. 不要做作，自然
 
 当前对话上下文：
 {context}"""
@@ -22,20 +29,25 @@ class Answer_api:
     def __init__(self, websocket, message:dict):
         self.Logger = Logger()
         self.message = message
+        #print(self.message)
         self.websocket = websocket
         self.user_id = str(message.get('message_sender_id'))
-        self.memory = MemoryStore(self.user_id)
+        self.memory = MemoryStore("1732373074")
         self.message_buffer = {}  # 用户ID: {"parts": [], "last_time": timestamp}
         
         try:
-            with open("_config.yml", "r", encoding="utf-8") as f:
+            with open("./_config.yml", "r", encoding="utf-8") as f:
                 self.yml = yaml.safe_load(f)
         except:
             self.Logger.error("配置文件config.yaml加载失败")
         
-    async def msg_answer_api(self, msg=None, is_active=False):
+    async def msg_answer_api(self, is_active=False):
+
         msg = self.message.get("raw_message")
+        if not msg:
+            return
         current_time = datetime.now()
+        print(f"收到消息: {msg}")
         
         # 初始化用户缓冲区
         if self.user_id not in self.message_buffer:
@@ -54,13 +66,14 @@ class Answer_api:
             should_process = True
         elif any(p.endswith(('。','！','？')) for p in buffer["parts"]):
             should_process = True
-            
+        print(1231231)
         if not should_process:
             return
             
         # 合并分片消息
         msg = " ".join(buffer["parts"])
         del self.message_buffer[self.user_id]
+        print(f"合并消息: {msg}")
         
         # 使用AI判断消息重要性(0-5级)
         importance_prompt = f"""请严格按以下规则评估消息重要性：
@@ -75,6 +88,7 @@ class Answer_api:
         只需返回数字0-5"""
         
         importance = 0
+        print(111)
         try:
             client = OpenAI(
                 api_key=self.yml["basic_settings"]['API_token'],
@@ -94,18 +108,31 @@ class Answer_api:
         if last_ai_msg and msg in last_ai_msg[0].get("content", ""):
             return
             
-        # 保存用户消息(带重要性评估)
-        self.memory.add_memory("user_msg", {"content": msg}, importance=importance)
-        
-        # 获取最近对话上下文 (排除合并消息中的重复内容)
-        context = []
-        seen_msgs = set()
-        for mem in reversed(self.memory.get_memories(limit=10)):
-            if mem["content"] not in seen_msgs:
-                context.append(mem)
-                seen_msgs.add(mem["content"])
-            if len(context) >= 5:
-                break
+        try:
+            # 保存用户消息(带重要性评估)
+            self.memory.add_memory("user_msg", {"content": msg}, importance=importance)
+            
+            # 获取最近对话上下文 (排除合并消息中的重复内容)
+            context = []
+            seen_msgs = set()
+            memories = self.memory.get_memories(limit=10)
+            if not memories:
+                self.Logger.error("无法获取记忆数据")
+                return
+                
+            for mem in reversed(memories):
+                if not isinstance(mem, dict) or "content" not in mem:
+                    continue
+                if mem["content"] not in seen_msgs:
+                    context.append(mem)
+                    seen_msgs.add(mem["content"])
+                if len(context) >= 5:
+                    break
+        except Exception as e:
+            self.Logger.error(f"保存消息或获取上下文失败: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return
         context = list(reversed(context))
         prompt = GF_PROMPT.format(context=json.dumps(context, ensure_ascii=False))
         
@@ -115,22 +142,59 @@ class Answer_api:
             base_url="https://api.deepseek.com"
         )
         
-        messages = [{"role": "user", "content": prompt + "\n用户说: " + msg}]
-        response = client.chat.completions.create(
-            model="deepseek-chat",
-            messages=messages,
-            temperature=0.7,
-            stream=True
-        )
+        # 获取历史对话记录
+        history = []
+        for mem in self.memory.get_memories(limit=10):
+            if mem.get("memory_type") == "user_msg":
+                history.append({"role": "user", "content": mem["content"]})
+            elif mem.get("memory_type") == "ai_msg":
+                history.append({"role": "assistant", "content": mem["content"]})
         
-        answer = ""
-        for chunk in response:
-            if chunk.choices[0].delta.content:
-                answer += chunk.choices[0].delta.content
+        # 构建多轮对话消息
+        messages = [
+            {"role": "system", "content": GF_PROMPT},
+            *history[-5:],  # 保留最近5轮对话
+            {"role": "user", "content": msg}
+        ]
         
-        # 保存AI回复
-        self.memory.add_memory("ai_msg", {"content": answer})
-        await self.msg_send_api(answer)
+        try:
+            response = client.chat.completions.create(
+                model="deepseek-chat",
+                messages=messages,
+                temperature=0.7,
+                stream=True
+            )
+            
+            answer = ""
+            for chunk in response:
+                if chunk.choices[0].delta.content:
+                    answer += chunk.choices[0].delta.content
+        except Exception as e:
+            self.Logger.error(f"AI回复生成失败: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return
+        
+        # 保存完整的对话记录
+        try:
+            # 保存用户消息(带完整对话上下文)
+            self.memory.add_memory("user_msg", {
+                "content": msg,
+                "full_context": messages
+            })
+            
+            # 保存AI回复(带完整对话上下文)
+            full_conversation = messages + [{"role": "assistant", "content": answer}]
+            self.memory.add_memory("ai_msg", {
+                "content": answer,
+                "full_context": full_conversation
+            })
+            
+            await self.msg_send_api(answer)
+        except Exception as e:
+            self.Logger.error(f"保存对话记录失败: {str(e)}")
+            import traceback
+            traceback.print_exc()
 
     async def msg_send_api(self,answer):
         if self.check_message():
@@ -144,6 +208,7 @@ class Answer_api:
             message: 事件数据
         """
         if self.message.get("raw_message") != None:
+            print(f"收到消息: {self.message.get('raw_message')}")
             await self.msg_answer_api()
         elif self.message.get("post_type") == "meta_event" and self.message.get("meta_event_type") == "heartbeat":
             # 检查是否需要主动聊天

@@ -49,15 +49,22 @@ class MemoryStore:
         """添加记忆到短期和长期数据库
         importance: 
         0-普通 1-一般重要 2-重要 3-很重 4-非常重要 5-极其重要
+        content: 可以是字符串或包含完整对话上下文的字典
         """
         now = datetime.now().isoformat()
+        
+        # 处理content为字典或字符串
+        if isinstance(content, dict):
+            content_data = json.dumps(content, ensure_ascii=False)
+        else:
+            content_data = json.dumps({"content": str(content)}, ensure_ascii=False)
         
         # 添加到短期记忆库
         conn = sqlite3.connect(self.short_term_db)
         cursor = conn.cursor()
         cursor.execute(
             "INSERT INTO memories (user_id, timestamp, memory_type, content, importance) VALUES (?, ?, ?, ?, ?)",
-            (self.user_id, now, memory_type, json.dumps(content), importance)
+            (self.user_id, now, memory_type, content_data, importance)
         )
         conn.commit()
         conn.close()
