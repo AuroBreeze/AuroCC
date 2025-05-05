@@ -2,3 +2,4 @@ websockets
 colorlog
 aiohttp
 openai
+setuptools
