@@ -6,6 +6,7 @@ from api.Botapi import QQAPI_list
 from api.memory_store import MemoryStore
 import yaml
 from openai import OpenAI
+import random
 
 GF_PROMPT = """你是一个可爱的二次元女友，名字叫欣欣，性格活泼开朗，有一个有趣的灵魂但有时会害羞。
 对话要求：
@@ -108,8 +109,7 @@ class Answer_api:
         context = list(reversed(context))
         prompt = GF_PROMPT.format(context=json.dumps(context, ensure_ascii=False))
         
-        # 调用DeepSeek API
-        from openai import OpenAI
+
         client = OpenAI(
             api_key=self.yml["basic_settings"]['API_token'],
             base_url="https://api.deepseek.com"
@@ -138,6 +138,17 @@ class Answer_api:
             user_id = self.Processed_data['message_sender_id']
             await QQAPI_list(self.websocket).send_message(user_id, answer)
 
+    async def handle_event(self):
+        """统一处理各种事件(消息/心跳)
+        Args:
+            message: 事件数据
+        """
+        if self.message.get("raw_message") != None:
+            await self.msg_answer_api()
+        elif self.message.get("post_type") == "meta_event" and self.message.get("meta_event_type") == "heartbeat":
+            # 检查是否需要主动聊天
+            await self.check_active_chat()
+
     def check_message(self)->bool:
         if self.message.get("message_type") == "private":
             if self.message.get("sub_type") == "friend":
@@ -153,7 +164,8 @@ class Answer_api:
             return False
             
         last_time = datetime.fromisoformat(last_chat[0].get("timestamp", ""))
-        if (datetime.now() - last_time).total_seconds() < 1800:  # 30分钟内聊过
+        
+        if (datetime.now() - last_time).total_seconds() < random.randint(30*60, 240*60):  # 30分钟内聊过
             return False
             
         # 准备主动聊天判断数据
@@ -177,7 +189,7 @@ class Answer_api:
         
         try:
             client = OpenAI(
-                api_key=self.Processed_data['API_token'],
+                api_key=self.yml["basic_settings"]['API_token'],
                 base_url="https://api.deepseek.com"
             )
             response = client.chat.completions.create(
