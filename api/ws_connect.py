@@ -1,7 +1,7 @@
 import websockets
-from basic_api.Logger_owner import Logger # 美化日志输出
-from basic_api.Share_date import Raw_data # 导入原始数据队列
-from basic_api.Msg_dispatcher import Msg_dispatcher # 导入消息处理类
+from api.Logger_owner import Logger # 美化日志输出
+from api.Share_date import Raw_data # 导入原始数据队列
+from api.Msg_dispatcher import Msg_dispatcher # 导入消息处理类
 import asyncio
 
 class Websocket_receiver:
@@ -21,7 +21,6 @@ class Websocket_receiver:
                 async for message in websocket:
                     self.logger.info("Message Received: %s" % message)
                     await Raw_data.put(message)  # 将接收到的数据,放入原始队列
-                    
                     # 开启消息处理任务
                     #Msg_processor_task = asyncio.create_task(Msg_dispatcher(websocket).dispatch_task_main())
 

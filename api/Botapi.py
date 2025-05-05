@@ -1,6 +1,6 @@
 import asyncio
 import json
-from basic_api.Logger_owner import Logger
+from api.Logger_owner import Logger
 
 class QQAPI_list:
     def __init__(self,websocket):

@@ -1,4 +1,4 @@
-from basic_api.ws_connect import Websocket_receiver
+from api.ws_connect import Websocket_receiver
 import asyncio
 
 async def main():
