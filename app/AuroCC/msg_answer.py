@@ -59,14 +59,41 @@ class Answer_api:
         # 合并分片消息
         msg = " ".join(buffer["parts"])
         del self.message_buffer[self.user_id]
+        
+        # 使用AI判断消息重要性(0-5级)
+        importance_prompt = f"""请严格按以下规则评估消息重要性：
+        消息内容：{msg}
+        评估标准：
+        0 - 普通日常对话
+        1 - 一般重要(个人偏好/习惯)
+        2 - 重要(情感表达)
+        3 - 很重(承诺/约定) 
+        4 - 非常重要(重要个人信息)
+        5 - 极其重要(关键承诺/秘密)
+        只需返回数字0-5"""
+        
+        importance = 0
+        try:
+            client = OpenAI(
+                api_key=self.Processed_data['API_token'],
+                base_url="https://api.deepseek.com"
+            )
+            response = client.chat.completions.create(
+                model="deepseek-chat",
+                messages=[{"role": "user", "content": importance_prompt}],
+                temperature=0.1
+            )
+            importance = int(response.choices[0].message.content.strip())
+        except:
+            importance = 1
             
         # 检查是否已回复过相同内容
         last_ai_msg = self.memory.get_memories("ai_msg", limit=1)
         if last_ai_msg and msg in last_ai_msg[0].get("content", ""):
             return
             
-        # 保存用户消息
-        self.memory.add_memory("user_msg", {"content": msg})
+        # 保存用户消息(带重要性评估)
+        self.memory.add_memory("user_msg", {"content": msg}, importance=importance)
         
         # 获取最近对话上下文 (排除合并消息中的重复内容)
         context = []
