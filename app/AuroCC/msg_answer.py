@@ -29,7 +29,6 @@ class Answer_api:
     def __init__(self, websocket, message:dict):
         self.Logger = Logger()
         self.message = message
-        #print(self.message)
         self.websocket = websocket
         self.user_id = str(message.get('message_sender_id'))
         self.memory = MemoryStore("1732373074")
@@ -47,8 +46,7 @@ class Answer_api:
         if not msg:
             return
         current_time = datetime.now()
-        print(f"收到消息: {msg}")
-        
+
         # 初始化用户缓冲区
         if self.user_id not in self.message_buffer:
             self.message_buffer[self.user_id] = {
@@ -66,7 +64,6 @@ class Answer_api:
             should_process = True
         elif any(p.endswith(('。','！','？')) for p in buffer["parts"]):
             should_process = True
-        print(1231231)
         if not should_process:
             return
             
@@ -88,7 +85,6 @@ class Answer_api:
         只需返回数字0-5"""
         
         importance = 0
-        print(111)
         try:
             client = OpenAI(
                 api_key=self.yml["basic_settings"]['API_token'],
@@ -199,7 +195,7 @@ class Answer_api:
     async def msg_send_api(self,answer):
         if self.check_message():
             # 私聊消息
-            user_id = self.Processed_data['message_sender_id']
+            user_id = self.message.get("user_id")
             await QQAPI_list(self.websocket).send_message(user_id, answer)
 
     async def handle_event(self):
@@ -208,7 +204,6 @@ class Answer_api:
             message: 事件数据
         """
         if self.message.get("raw_message") != None:
-            print(f"收到消息: {self.message.get('raw_message')}")
             await self.msg_answer_api()
         elif self.message.get("post_type") == "meta_event" and self.message.get("meta_event_type") == "heartbeat":
             # 检查是否需要主动聊天
@@ -217,8 +212,10 @@ class Answer_api:
     def check_message(self)->bool:
         if self.message.get("message_type") == "private":
             if self.message.get("sub_type") == "friend":
-                if self.message.get("target_id") == self.yml["basic_settings"]["QQbot_admin_account"]:
+
+                if str(self.message.get("user_id")) == str(self.yml["basic_settings"]["QQbot_admin_account"]):
                     return True
+
         return False
 
     async def check_active_chat(self):
@@ -228,7 +225,11 @@ class Answer_api:
         if not last_chat:
             return False
             
-        last_time = datetime.fromisoformat(last_chat[0].get("timestamp", ""))
+        timestamp = last_chat[0].get("timestamp", "")
+        if not timestamp:
+            return False
+            
+        last_time = datetime.fromisoformat(timestamp)
         
         if (datetime.now() - last_time).total_seconds() < random.randint(30*60, 240*60):  # 30分钟内聊过
             return False
