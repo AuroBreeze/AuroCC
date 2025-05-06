@@ -107,26 +107,64 @@ class Answer_api:
         if last_ai_msg and msg in last_ai_msg[0].get("content", ""):
             return
             
+        # 获取最近对话上下文 (确保获取有效数据)
         try:
-            # 保存用户消息(带重要性评估)
-            self.memory.add_memory("user_msg", {"content": msg}, importance=importance)
-            
-            # 获取最近对话上下文 (排除合并消息中的重复内容)
-            context = []
-            seen_msgs = set()
             memories = self.memory.get_memories(limit=10)
             if not memories:
-                self.Logger.error("无法获取记忆数据")
-                return
+                # 数据库为空时初始化第一条记录
+                self.memory.add_memory("system_msg", {
+                    "content": "系统初始化",
+                    "importance": 0
+                })
+                memories = self.memory.get_memories(limit=10)
+                if not memories:
+                    self.Logger.error("无法初始化记忆数据")
+                    return
                 
-            for mem in reversed(memories):
-                if not isinstance(mem, dict) or "content" not in mem:
+            context = []
+            seen_msgs = set()
+            
+            # 按时间顺序处理记忆(从旧到新)
+            for mem in sorted(memories, key=lambda x: x.get("timestamp", "")):
+                if not isinstance(mem, dict):
                     continue
-                if mem["content"] not in seen_msgs:
-                    context.append(mem)
-                    seen_msgs.add(mem["content"])
-                if len(context) >= 5:
+                    
+                # 优先使用full_context中的对话历史
+                if "full_context" in mem and isinstance(mem["full_context"], (str, list)):
+                    try:
+                        if isinstance(mem["full_context"], str):
+                            full_ctx = json.loads(mem["full_context"])
+                        else:
+                            full_ctx = mem["full_context"]
+                            
+                        # 添加完整上下文中的对话
+                        for msg in full_ctx:
+                            if msg.get("role") in ["user", "assistant"]:
+                                content = msg.get("content", "")
+                                if content and content not in seen_msgs:
+                                    seen_msgs.add(content)
+                                    context.append({
+                                        "role": msg["role"],
+                                        "content": content
+                                    })
+                    except Exception as e:
+                        self.Logger.error(f"解析full_context失败: {str(e)}")
+                        continue
+                
+                # 如果没有full_context或解析失败，使用content字段
+                content = mem.get("content", "")
+                if content and content not in seen_msgs:
+                    seen_msgs.add(content)
+                    context.append({
+                        "role": "user" if mem.get("memory_type") == "user_msg" else "assistant",
+                        "content": content
+                    })
+                
+                if len(context) >= 10:  # 增加上下文长度限制
                     break
+                        
+                if not context:
+                    context = [{"role": "user", "content": msg}]
         except Exception as e:
             self.Logger.error(f"保存消息或获取上下文失败: {str(e)}")
             import traceback
@@ -149,12 +187,25 @@ class Answer_api:
             elif mem.get("memory_type") == "ai_msg":
                 history.append({"role": "assistant", "content": mem["content"]})
         
-        # 构建多轮对话消息
-        messages = [
-            {"role": "system", "content": GF_PROMPT},
-            *history[-5:],  # 保留最近5轮对话
-            {"role": "user", "content": msg}
-        ]
+        # 构建多轮对话消息(确保格式正确)
+        messages = [{
+            "role": "system",
+            "content": GF_PROMPT
+        }]
+        
+        # 添加历史消息(过滤无效数据)
+        for h in history[-5:]:
+            if isinstance(h, dict) and "role" in h and "content" in h:
+                messages.append({
+                    "role": str(h["role"]),
+                    "content": str(h["content"])
+                })
+        
+        # 添加当前消息
+        messages.append({
+            "role": "user",
+            "content": str(msg)
+        })
         
         try:
             response = client.chat.completions.create(
@@ -176,17 +227,21 @@ class Answer_api:
         
         # 保存完整的对话记录
         try:
-            # 保存用户消息(带完整对话上下文)
+            # 保存用户消息(带时间戳和重要性评估)
             self.memory.add_memory("user_msg", {
                 "content": msg,
-                "full_context": messages
+                "full_context": json.dumps(messages, ensure_ascii=False),
+                "importance": importance,
+                "timestamp": datetime.now().isoformat()
             })
             
             # 保存AI回复(带完整对话上下文)
             full_conversation = messages + [{"role": "assistant", "content": answer}]
             self.memory.add_memory("ai_msg", {
                 "content": answer,
-                "full_context": full_conversation
+                "full_context": json.dumps(full_conversation, ensure_ascii=False),
+                "importance": min(importance + 1, 5),
+                "timestamp": datetime.now().isoformat()
             })
             
             await self.msg_send_api(answer)

@@ -59,15 +59,20 @@ class MemoryStore:
         else:
             content_data = json.dumps({"content": str(content)}, ensure_ascii=False)
         
-        # 添加到短期记忆库
+        # 添加到短期记忆库(确保importance为整数)
         conn = sqlite3.connect(self.short_term_db)
         cursor = conn.cursor()
-        cursor.execute(
-            "INSERT INTO memories (user_id, timestamp, memory_type, content, importance) VALUES (?, ?, ?, ?, ?)",
-            (self.user_id, now, memory_type, content_data, importance)
-        )
-        conn.commit()
-        conn.close()
+        try:
+            cursor.execute(
+                "INSERT INTO memories (user_id, timestamp, memory_type, content, importance) VALUES (?, ?, ?, ?, ?)",
+                (self.user_id, now, memory_type, content_data, int(importance))
+            )
+            conn.commit()
+        except sqlite3.Error as e:
+            self.Logger.error(f"存储记忆失败: {str(e)}")
+            raise
+        finally:
+            conn.close()
         
         # 重要记忆(importance>=4)直接添加到长期记忆库
         if importance >= 4:
@@ -142,6 +147,46 @@ class MemoryStore:
         
         conn.commit()
         conn.close()
+        
+    def update_memory(self, memory_type, content_update, timestamp=None):
+        """更新最近一条记忆的内容
+        Args:
+            memory_type: 记忆类型
+            content_update: 要更新的内容(dict)
+            timestamp: 可选，指定要更新的记忆时间
+        """
+        conn = sqlite3.connect(self.short_term_db)
+        cursor = conn.cursor()
+        
+        # 获取最近一条记忆
+        query = "SELECT id, content FROM memories WHERE user_id = ? AND memory_type = ?"
+        params = [self.user_id, memory_type]
+        
+        if timestamp:
+            query += " AND timestamp = ?"
+            params.append(timestamp)
+            
+        query += " ORDER BY timestamp DESC LIMIT 1"
+        
+        cursor.execute(query, params)
+        result = cursor.fetchone()
+        if not result:
+            return False
+            
+        mem_id, old_content = result
+        old_data = json.loads(old_content)
+        
+        # 合并新旧内容
+        updated_content = {**old_data, **content_update}
+        
+        # 更新数据库
+        cursor.execute(
+            "UPDATE memories SET content = ? WHERE id = ?",
+            (json.dumps(updated_content, ensure_ascii=False), mem_id)
+        )
+        conn.commit()
+        conn.close()
+        return True
         
     def get_memories(self, memory_type=None, limit=10):
         """合并查询两个数据库的记忆"""
