@@ -31,14 +31,17 @@ class Answer_api:
         self.message = message
         self.websocket = websocket
         self.user_id = str(message.get('message_sender_id'))
-        self.memory = MemoryStore("1732373074")
+        
         self.message_buffer = {}  # 用户ID: {"parts": [], "last_time": timestamp}
         
         try:
             with open("./_config.yml", "r", encoding="utf-8") as f:
                 self.yml = yaml.safe_load(f)
+                self.memory = MemoryStore(self.yml["basic_settings"]["QQbot_admin_account"])
         except:
             self.Logger.error("配置文件config.yaml加载失败")
+            
+            
         
     async def msg_answer_api(self, is_active=False):
 
