@@ -74,8 +74,8 @@ class MemoryStore:
         finally:
             conn.close()
         
-        # 重要记忆(importance>=4)直接添加到长期记忆库
-        if importance >= 4:
+        # 重要记忆(importance>=3)直接添加到长期记忆库
+        if importance >= 3:
             next_review = self._calculate_next_review(now, importance)
             conn = sqlite3.connect(self.long_term_db)
             cursor = conn.cursor()
