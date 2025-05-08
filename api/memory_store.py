@@ -82,7 +82,7 @@ class MemoryStore:
             cursor = conn.cursor()
             cursor.execute(
                 "INSERT INTO memories (user_id, timestamp, memory_type, content, importance, last_reviewed, next_review) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (self.user_id, now, memory_type, json.dumps(content), 
+                (self.user_id, now, memory_type, content_data, 
                  importance, now, next_review)
             )
             conn.commit()

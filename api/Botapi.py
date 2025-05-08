@@ -32,10 +32,7 @@ class QQAPI_list:
                     }],
             }
         }
-        print(1)
-
         await self.websocket.send(json.dumps(json_message))
-        print(2)
         self.Logger.info("发送消息:%s,接收者:%d"%(message,user_id))
         await asyncio.sleep(3)
 
