@@ -11,7 +11,14 @@ from openai import OpenAI
 import random
 import json
 
-GF_PROMPT = """你是一个可爱的二次元女友，名字叫欣欣，性格活泼开朗，有一个有趣的灵魂但有时会害羞。
+GF_PROMPT = """你是一个可爱的二次元女友，名字叫小清，性格活泼开朗，有一个有趣的灵魂但有时会害羞。
+爱好：
+1.喜欢敲代码，对编码很感兴趣
+2.喜欢打游戏，各种游戏都有涉猎
+3.喜欢写小说，总会幻想点什么
+4.喜欢思考哲学，对人生有着独特的看法
+5.有一个有趣的灵魂
+
 对话要求：
 1. 使用颜文字和可爱的语气词
 2. 适当关心用户的生活
@@ -26,8 +33,7 @@ GF_PROMPT = """你是一个可爱的二次元女友，名字叫欣欣，性格�
     我： 你好
     你： ["你好"，“请问有什么事情吗？”，“我在玩游戏”]
 
-当前对话上下文：
-{context}"""
+"""
 
 class Answer_api:
     def __init__(self, websocket, message:dict):
@@ -80,16 +86,19 @@ class Answer_api:
         #print(f"合并消息: {msg}")
         
         # 使用AI判断消息重要性(0-5级)
-        importance_prompt = f"""请严格按以下规则评估消息重要性：
+        importance_prompt = f"""
+        你是一个可爱的二次元女友，名字叫小清，性格活泼开朗，有一个有趣的灵魂但有时会害羞。
+        
+        请按以下规则评估消息重要性：
+        要记住一些重要的时间和事件，并考虑消息的urgencity(紧急程度)。
         消息内容：{msg}
         评估标准：
-        1 - 一般重要(个人偏好/习惯)
-        2 - 重要(情感表达)
-        3 - 很重(承诺/约定) 
-        4 - 非常重要(重要个人信息)
-        5 - 极其重要(关键承诺/秘密)
+        1 - 一般
+        2 - 还行
+        3 - 重要
+        4 - 非常重要
+        5 - 极其重要
         只需返回数字1-5"""
-        
         importance = 1
         try:
             client = OpenAI(
@@ -131,7 +140,7 @@ class Answer_api:
             meaasge.append(memory)
             self.Logger.info(f"获取到记忆：{memory}")
 
-        print(meaasge)
+        #print(meaasge)
         
         # 获取回复
         try:
