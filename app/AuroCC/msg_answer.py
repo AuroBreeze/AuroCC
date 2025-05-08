@@ -1,8 +1,6 @@
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-
-import aiohttp
 import json
 from datetime import datetime, timedelta
 from api.Logger_owner import Logger
@@ -101,12 +99,13 @@ class Answer_api:
         except:
             importance = 1
         finally:
-            self.memory.add_memory("ai_msg",content={"role": "user", "content": msg},importance=importance)
+            content_json = {"role": "user", "content": msg}
+            self.memory.add_memory("user_msg",content=content_json,importance=importance)
         # 获取最近对话上下文 (确保获取有效数据)
         try:
             memories = self.memory.get_memories()
-            #print("获取最近对话上下文...")
-            #print(memories)
+            print("获取最近对话上下文...")
+            print(memories)
             if not memories:
                 # 数据库为空时初始化第一条记录
                 self.memory.add_memory("system_msg", {
@@ -119,6 +118,36 @@ class Answer_api:
                     return
         except:
             self.Logger.error("无法获取记忆数据")
+            
+        meaasge = [{"role": "system", "content": GF_PROMPT}]
+        
+        for memory in memories:
+            meaasge.append(memory)
+            self.Logger.info(f"获取到记忆：{memory}")
+        
+        # 获取回复
+        try:
+            client = OpenAI(
+                api_key=self.yml["basic_settings"]['API_token'],
+                base_url="https://api.deepseek.com"
+            )
+            response = client.chat.completions.create(
+                model="deepseek-chat",
+                temperature=0.7,
+                messages=meaasge,
+            )
+            print(response)
+            answer = response.choices[0].message.content.strip()
+            print(f"AI回复: {answer}")
+        except:
+            answer = "我无法回答你的问题，请稍后再试"
+            self.Logger.error(f"AI回复错误: {answer}")
+        
+        # 发送回复
+        await self.msg_send_api(answer)
+        
+        
+        
 
     async def msg_send_api(self,answer):
         if self.check_message():

@@ -57,7 +57,7 @@ class MemoryStore:
         if isinstance(content, dict):
             content_data = json.dumps(content, ensure_ascii=False)
         else:
-            content_data = json.dumps({"content": str(content)}, ensure_ascii=False)
+            content_data = json.dumps({"role":"assistant","content": str(content)}, ensure_ascii=False)
         print(f"[MemoryStore] 添加记忆: {type(content_data)} {content_data}")
         
         # 添加到短期记忆库(确保importance为整数)
