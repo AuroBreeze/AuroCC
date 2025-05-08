@@ -58,6 +58,7 @@ class MemoryStore:
             content_data = json.dumps(content, ensure_ascii=False)
         else:
             content_data = json.dumps({"content": str(content)}, ensure_ascii=False)
+        print(f"[MemoryStore] 添加记忆: {type(content_data)} {content_data}")
         
         # 添加到短期记忆库(确保importance为整数)
         conn = sqlite3.connect(self.short_term_db)
@@ -187,48 +188,46 @@ class MemoryStore:
         conn.commit()
         conn.close()
         return True
-        
-    def get_memories(self, memory_type=None, limit=10):
+    def get_memories(self, memory_type=None):
         """合并查询两个数据库的记忆"""
         results = []
-        
+    
         # 先获取长期记忆
         conn = sqlite3.connect(self.long_term_db)
         cursor = conn.cursor()
-        
+    
         query = "SELECT content FROM memories WHERE user_id = ?"
         params = [self.user_id]
-        
+    
         if memory_type:
             query += " AND memory_type = ?"
             params.append(memory_type)
-            
-        query += " ORDER BY importance DESC, timestamp DESC LIMIT ?"
-        params.append(limit)
         
+        query += " ORDER BY importance DESC, timestamp DESC"
+    
         cursor.execute(query, params)
         results.extend(json.loads(row[0]) for row in cursor.fetchall())
         conn.close()
+    
+        # 再获取短期记忆
+        conn = sqlite3.connect(self.short_term_db)
+        cursor = conn.cursor()
+    
+        query = "SELECT content FROM memories WHERE user_id = ?"
+        params = [self.user_id]
+    
+        if memory_type:
+            query += " AND memory_type = ?"
+            params.append(memory_type)
         
-        # 如果不够limit数量，补充短期记忆
-        if len(results) < limit:
-            remaining = limit - len(results)
-            
-            conn = sqlite3.connect(self.short_term_db)
-            cursor = conn.cursor()
-            
-            query = "SELECT content FROM memories WHERE user_id = ?"
-            params = [self.user_id]
-            
-            if memory_type:
-                query += " AND memory_type = ?"
-                params.append(memory_type)
-                
-            query += " ORDER BY timestamp DESC LIMIT ?"
-            params.append(remaining)
-            
-            cursor.execute(query, params)
-            results.extend(json.loads(row[0]) for row in cursor.fetchall())
-            conn.close()
-            
+        query += " ORDER BY timestamp DESC"
+    
+        cursor.execute(query, params)
+        results.extend(json.loads(row[0]) for row in cursor.fetchall())
+        conn.close()
+    
+        #print(results)
         return results
+    
+        
+

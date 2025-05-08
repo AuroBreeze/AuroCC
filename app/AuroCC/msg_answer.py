@@ -73,21 +73,20 @@ class Answer_api:
         # 合并分片消息
         msg = " ".join(buffer["parts"])
         del self.message_buffer[self.user_id]
-        print(f"合并消息: {msg}")
+        #print(f"合并消息: {msg}")
         
         # 使用AI判断消息重要性(0-5级)
         importance_prompt = f"""请严格按以下规则评估消息重要性：
         消息内容：{msg}
         评估标准：
-        0 - 普通日常对话
         1 - 一般重要(个人偏好/习惯)
         2 - 重要(情感表达)
         3 - 很重(承诺/约定) 
         4 - 非常重要(重要个人信息)
         5 - 极其重要(关键承诺/秘密)
-        只需返回数字0-5"""
+        只需返回数字1-5"""
         
-        importance = 0
+        importance = 1
         try:
             client = OpenAI(
                 api_key=self.yml["basic_settings"]['API_token'],
@@ -101,154 +100,25 @@ class Answer_api:
             importance = int(response.choices[0].message.content.strip())
         except:
             importance = 1
-            
-        # 检查是否已回复过相同内容
-        last_ai_msg = self.memory.get_memories("ai_msg", limit=1)
-        if last_ai_msg and msg in last_ai_msg[0].get("content", ""):
-            return
-            
+        finally:
+            self.memory.add_memory("ai_msg",content={"role": "user", "content": msg},importance=importance)
         # 获取最近对话上下文 (确保获取有效数据)
         try:
-            memories = self.memory.get_memories(limit=10)
+            memories = self.memory.get_memories()
+            #print("获取最近对话上下文...")
+            #print(memories)
             if not memories:
                 # 数据库为空时初始化第一条记录
                 self.memory.add_memory("system_msg", {
                     "content": "系统初始化",
                     "importance": 0
                 })
-                memories = self.memory.get_memories(limit=10)
+                memories = self.memory.get_memories()
                 if not memories:
                     self.Logger.error("无法初始化记忆数据")
                     return
-                
-            context = []
-            seen_msgs = set()
-            
-            # 按时间顺序处理记忆(从旧到新)
-            for mem in sorted(memories, key=lambda x: x.get("timestamp", "")):
-                if not isinstance(mem, dict):
-                    continue
-                    
-                # 优先使用full_context中的对话历史
-                if "full_context" in mem and isinstance(mem["full_context"], (str, list)):
-                    try:
-                        if isinstance(mem["full_context"], str):
-                            full_ctx = json.loads(mem["full_context"])
-                        else:
-                            full_ctx = mem["full_context"]
-                            
-                        # 添加完整上下文中的对话
-                        for msg in full_ctx:
-                            if msg.get("role") in ["user", "assistant"]:
-                                content = msg.get("content", "")
-                                if content and content not in seen_msgs:
-                                    seen_msgs.add(content)
-                                    context.append({
-                                        "role": msg["role"],
-                                        "content": content
-                                    })
-                    except Exception as e:
-                        self.Logger.error(f"解析full_context失败: {str(e)}")
-                        continue
-                
-                # 如果没有full_context或解析失败，使用content字段
-                content = mem.get("content", "")
-                if content and content not in seen_msgs:
-                    seen_msgs.add(content)
-                    context.append({
-                        "role": "user" if mem.get("memory_type") == "user_msg" else "assistant",
-                        "content": content
-                    })
-                
-                if len(context) >= 10:  # 增加上下文长度限制
-                    break
-                        
-                if not context:
-                    context = [{"role": "user", "content": msg}]
-        except Exception as e:
-            self.Logger.error(f"保存消息或获取上下文失败: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            return
-        context = list(reversed(context))
-        prompt = GF_PROMPT.format(context=json.dumps(context, ensure_ascii=False))
-        
-
-        client = OpenAI(
-            api_key=self.yml["basic_settings"]['API_token'],
-            base_url="https://api.deepseek.com"
-        )
-        
-        # 获取历史对话记录
-        history = []
-        for mem in self.memory.get_memories(limit=10):
-            if mem.get("memory_type") == "user_msg":
-                history.append({"role": "user", "content": mem["content"]})
-            elif mem.get("memory_type") == "ai_msg":
-                history.append({"role": "assistant", "content": mem["content"]})
-        
-        # 构建多轮对话消息(确保格式正确)
-        messages = [{
-            "role": "system",
-            "content": GF_PROMPT
-        }]
-        
-        # 添加历史消息(过滤无效数据)
-        for h in history[-5:]:
-            if isinstance(h, dict) and "role" in h and "content" in h:
-                messages.append({
-                    "role": str(h["role"]),
-                    "content": str(h["content"])
-                })
-        
-        # 添加当前消息
-        messages.append({
-            "role": "user",
-            "content": str(msg)
-        })
-        
-        try:
-            response = client.chat.completions.create(
-                model="deepseek-chat",
-                messages=messages,
-                temperature=0.7,
-                stream=True
-            )
-            
-            answer = ""
-            for chunk in response:
-                if chunk.choices[0].delta.content:
-                    answer += chunk.choices[0].delta.content
-        except Exception as e:
-            self.Logger.error(f"AI回复生成失败: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            return
-        
-        # 保存完整的对话记录
-        try:
-            # 保存用户消息(带时间戳和重要性评估)
-            self.memory.add_memory("user_msg", {
-                "content": msg,
-                "full_context": json.dumps(messages, ensure_ascii=False),
-                "importance": importance,
-                "timestamp": datetime.now().isoformat()
-            })
-            
-            # 保存AI回复(带完整对话上下文)
-            full_conversation = messages + [{"role": "assistant", "content": answer}]
-            self.memory.add_memory("ai_msg", {
-                "content": answer,
-                "full_context": json.dumps(full_conversation, ensure_ascii=False),
-                "importance": min(importance + 1, 5),
-                "timestamp": datetime.now().isoformat()
-            })
-            
-            await self.msg_send_api(answer)
-        except Exception as e:
-            self.Logger.error(f"保存对话记录失败: {str(e)}")
-            import traceback
-            traceback.print_exc()
+        except:
+            self.Logger.error("无法获取记忆数据")
 
     async def msg_send_api(self,answer):
         if self.check_message():
@@ -279,7 +149,7 @@ class Answer_api:
     async def check_active_chat(self):
         """检查是否需要主动发起聊天"""
         # 获取最后聊天时间
-        last_chat = self.memory.get_memories(limit=1)
+        last_chat = self.memory.get_memories()
         if not last_chat:
             return False
             
@@ -295,7 +165,7 @@ class Answer_api:
         # 准备主动聊天判断数据
         context = {
             "last_chat": last_chat[0],
-            "memories": self.memory.get_memories(limit=5),
+            "memories": self.memory.get_memories(),
             "current_time": datetime.now().isoformat()
         }
         
