@@ -157,7 +157,7 @@ class Answer_api:
             answer = response.choices[0].message.content.strip()
             print(f"AI回复: {answer}")
         except:
-            answer = "我无法回答你的问题，请稍后再试"
+            answer = "我无法回答你的问题(｡･ω･｡)"
             self.Logger.error(f"AI回复错误: {answer}")
         finally:
             answer_json = {"role": "assistant", "content": answer}
