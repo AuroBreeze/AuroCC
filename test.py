@@ -7,8 +7,8 @@ with open("_config.yml", "r",encoding="utf-8") as f:
 api_key = config["basic_settings"]["API_token"]
 
 client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
-
-
+# sudo xvfb-run -a qq --no-sandbox -q 3552638520 
+# source .venv/bin/activate
 messages=[
         {"role": "system", "content": "使用中文与我对话"},
         {"role": "user", "content": "你好"}
