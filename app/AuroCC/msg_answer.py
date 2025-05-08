@@ -142,12 +142,12 @@ class Answer_api:
         except:
             answer = "我无法回答你的问题，请稍后再试"
             self.Logger.error(f"AI回复错误: {answer}")
+        finally:
+            answer_json = {"role": "assistant", "content": answer}
+            self.memory.add_memory("ai_msg",content=answer_json)
         
         # 发送回复
         await self.msg_send_api(answer)
-        
-        
-        
 
     async def msg_send_api(self,answer):
         if self.check_message():
