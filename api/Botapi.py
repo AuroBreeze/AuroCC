@@ -6,8 +6,6 @@ class QQAPI_list:
     def __init__(self,websocket):
         self.websocket = websocket
         self.Logger = Logger()
-
-
     async def send_message(self,user_id,message): #发送私聊消息
         """_summary_
         {
@@ -22,7 +20,7 @@ class QQAPI_list:
             ]
         }
         """
-        message = {
+        json_message = {
             "action": "send_private_msg",
             "params":{
                 "user_id": user_id,
@@ -34,7 +32,10 @@ class QQAPI_list:
                     }],
             }
         }
-        await self.websocket.send(json.dumps(message))
+        print(1)
+
+        await self.websocket.send(json.load(json_message))
+        print(2)
         self.Logger.info("发送消息:%s,接收者:%d"%(message,user_id))
         await asyncio.sleep(3)
 

@@ -10,6 +10,7 @@ import yaml
 from openai import OpenAI
 import random
 import json
+import asyncio
 
 GF_PROMPT = """你是一个可爱的二次元女友，名字叫小清，性格活泼开朗，有一个有趣的灵魂但有时会害羞。
 爱好：
@@ -114,13 +115,14 @@ class Answer_api:
         except:
             importance = 1
         finally:
+            msg = msg+"当前时间为："+str(datetime.now())
             content_json = {"role": "user", "content": msg}
             self.memory.add_memory("user_msg",content=content_json,importance=importance)
         # 获取最近对话上下文 (确保获取有效数据)
         try:
             memories = self.memory.get_memories()
-            print("获取最近对话上下文...")
-            print(memories)
+            #print("获取最近对话上下文...")
+            #print(memories)
             if not memories:
                 # 数据库为空时初始化第一条记录
                 self.memory.add_memory("system_msg", {
@@ -163,8 +165,16 @@ class Answer_api:
             answer_json = {"role": "assistant", "content": answer}
             self.memory.add_memory("ai_msg",content=answer_json)
         
-        # 发送回复
-        await self.msg_send_api(answer)
+        answer = json.loads(answer)
+        
+        try:
+            for answer_part in answer:
+                random_delay = random.randint(1, 3)
+                await asyncio.sleep(random_delay)
+                await self.msg_send_api(answer_part)
+        except:
+            await self.msg_send_api("消息发送失败(｡･ω･｡)")
+            self.Logger.error(f"消息发送失败: {answer}")
 
     async def msg_send_api(self,answer):
         if self.check_message():
@@ -179,9 +189,9 @@ class Answer_api:
         """
         if self.message.get("raw_message") != None:
             await self.msg_answer_api()
-        elif self.message.get("post_type") == "meta_event" and self.message.get("meta_event_type") == "heartbeat":
-            # 检查是否需要主动聊天
-            await self.check_active_chat()
+        # elif self.message.get("post_type") == "meta_event" and self.message.get("meta_event_type") == "heartbeat":
+        #     # 检查是否需要主动聊天
+        #     await self.check_active_chat()
 
     def check_message(self)->bool:
         if self.message.get("message_type") == "private":
