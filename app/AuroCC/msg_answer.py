@@ -179,7 +179,7 @@ class Answer_api:
     async def msg_send_api(self,answer):
         if self.check_message():
             # 私聊消息
-            user_id = self.message.get("user_id")
+            user_id = self.yml["basic_settings"]["QQbot_admin_account"]
             await QQAPI_list(self.websocket).send_message(user_id, answer)
 
     async def handle_event(self):
@@ -189,23 +189,22 @@ class Answer_api:
         """
         if self.message.get("raw_message") != None:
             await self.msg_answer_api()
-        # elif self.message.get("post_type") == "meta_event" and self.message.get("meta_event_type") == "heartbeat":
-        #     # 检查是否需要主动聊天
-        #     await self.check_active_chat()
+        elif self.message.get("post_type") == "meta_event" and self.message.get("meta_event_type") == "heartbeat":
+            # 检查是否需要主动聊天
+            await self.check_active_chat()
 
     def check_message(self)->bool:
         if self.message.get("message_type") == "private":
             if self.message.get("sub_type") == "friend":
-
                 if str(self.message.get("user_id")) == str(self.yml["basic_settings"]["QQbot_admin_account"]):
                     return True
-
         return False
 
     async def check_active_chat(self):
         """检查是否需要主动发起聊天"""
         # 获取最后聊天时间
         last_chat = self.memory.get_memories()
+        print(last_chat)
         if not last_chat:
             return False
             
@@ -215,7 +214,7 @@ class Answer_api:
             
         last_time = datetime.fromisoformat(timestamp)
         
-        if (datetime.now() - last_time).total_seconds() < random.randint(30*60, 240*60):  # 30分钟内聊过
+        if (datetime.now() - last_time).total_seconds() < random.randint(10, 60):  # 30分钟内聊过
             return False
             
         # 准备主动聊天判断数据
@@ -229,7 +228,7 @@ class Answer_api:
         prompt = f"""请根据以下条件判断是否需要主动发起聊天：
         最后聊天时间：{last_time}
         当前时间：{datetime.now()}
-        最近聊天内容：{json.dumps(context['memories'], ensure_ascii=False)}
+        最近聊天内容：{reversed(context["memories"])}
         
         判断标准：
         1. 用户没有明确表示不想聊天
@@ -263,12 +262,13 @@ class Answer_api:
                 try:
                     topic_response = client.chat.completions.create(
                         model="deepseek-chat",
-                        messages=[{"role": "user", "content": topic_prompt}],
+                        messages=[{"role": "user", "content": GF_PROMPT+topic_prompt}],
                         temperature=0.7
                     )
                     opener = topic_response.choices[0].message.content.strip()
                     # 发起主动聊天
-                    await self.msg_answer_api(opener, is_active=True)
+                    await self.msg_send_api(opener)
+                    print(f"发起主动聊天: {opener}")
                 except Exception as e:
                     self.Logger.error(f"话题生成失败: {str(e)}")
                     # 使用默认开场白
