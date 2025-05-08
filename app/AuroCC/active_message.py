@@ -2,12 +2,18 @@ from datetime import datetime
 from api.memory_store import MemoryStore
 from openai import OpenAI
 from api.Botapi import QQAPI_list
-
+import yaml
 class ActiveMessageHandler:
     def __init__(self, websocket):
         self.websocket = websocket
+        
+        try:
+            with open("_config.yaml","r",encoding="utf-8") as f:
+                self.config = yaml.load(f, Loader=yaml.FullLoader)
+        except FileNotFoundError:
+            self.config = {}
         self.client = OpenAI(
-            api_key="sk-8128daf7c488470bb1efce2b405a7572",
+            api_key=self.config["basic_settings"]["QQbot_admin_account"],
             base_url="https://api.deepseek.com"
         )
     async def check_and_send_message(self, user_id):
