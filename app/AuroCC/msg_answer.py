@@ -20,6 +20,12 @@ GF_PROMPT = """你是一个可爱的二次元女友，名字叫欣欣，性格�
 5. 不要叫主人什么的词语
 6. 不要做作，自然
 
+注意：和我聊天时，学会适当断句，将长句切短一点，并使用合适的语气词和颜文字。
+    回复时务必使用列表进行回复。
+    示例：
+    我： 你好
+    你： ["你好"，“请问有什么事情吗？”，“我在玩游戏”]
+
 当前对话上下文：
 {context}"""
 
@@ -121,9 +127,11 @@ class Answer_api:
             
         meaasge = [{"role": "system", "content": GF_PROMPT}]
         
-        for memory in memories:
+        for memory in reversed(memories):
             meaasge.append(memory)
             self.Logger.info(f"获取到记忆：{memory}")
+
+        print(meaasge)
         
         # 获取回复
         try:
@@ -136,7 +144,7 @@ class Answer_api:
                 temperature=0.7,
                 messages=meaasge,
             )
-            print(response)
+            #print(response)
             answer = response.choices[0].message.content.strip()
             print(f"AI回复: {answer}")
         except:
