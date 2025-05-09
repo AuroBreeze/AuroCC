@@ -2,6 +2,7 @@ import sqlite3
 import json
 from pathlib import Path
 from datetime import datetime, timedelta
+from .Logger_owner import Logger
 
 class MemoryStore:
     def __init__(self, user_id):
@@ -9,6 +10,7 @@ class MemoryStore:
         self.short_term_db = Path(f"user_memories_short_{user_id}.db")
         self.long_term_db = Path(f"user_memories_long_{user_id}.db")
         self._init_dbs()
+        self.logger = Logger()
         
     def _init_dbs(self):
         # 短期记忆库(保存7天)
@@ -58,7 +60,9 @@ class MemoryStore:
             content_data = json.dumps(content, ensure_ascii=False)
         else:
             content_data = json.dumps({"role":"assistant","content": str(content)}, ensure_ascii=False)
-        print(f"[MemoryStore] 添加记忆: {type(content_data)} {content_data}")
+        #print(f"[MemoryStore] 添加记忆: {type(content_data)} {content_data}")
+        self.logger.info(f"添加记忆: {type(content_data)} {content_data}")
+        
         
         # 添加到短期记忆库(确保importance为整数)
         conn = sqlite3.connect(self.short_term_db)
@@ -119,7 +123,7 @@ class MemoryStore:
         cursor.execute("""
             SELECT timestamp, memory_type, content, importance 
             FROM memories 
-            WHERE user_id = ? AND importance >= 4 AND timestamp <= ?
+            WHERE user_id = ? AND importance >= 3 AND timestamp <= ?
         """, (self.user_id, week_ago))
         
         important_memories = cursor.fetchall()
@@ -143,73 +147,19 @@ class MemoryStore:
         # 清理7天前的普通记忆
         cursor.execute("""
             DELETE FROM memories 
-            WHERE user_id = ? AND timestamp <= ? AND importance < 1
+            WHERE user_id = ? AND timestamp <= ? AND importance < 2
         """, (self.user_id, week_ago))
         
         conn.commit()
         conn.close()
         
-    def update_memory(self, memory_type, content_update, timestamp=None):
-        """更新最近一条记忆的内容
-        Args:
-            memory_type: 记忆类型
-            content_update: 要更新的内容(dict)
-            timestamp: 可选，指定要更新的记忆时间
-        """
-        conn = sqlite3.connect(self.short_term_db)
-        cursor = conn.cursor()
-        
-        # 获取最近一条记忆
-        query = "SELECT id, content FROM memories WHERE user_id = ? AND memory_type = ?"
-        params = [self.user_id, memory_type]
-        
-        if timestamp:
-            query += " AND timestamp = ?"
-            params.append(timestamp)
-            
-        query += " ORDER BY timestamp DESC LIMIT 1"
-        
-        cursor.execute(query, params)
-        result = cursor.fetchone()
-        if not result:
-            return False
-            
-        mem_id, old_content = result
-        old_data = json.loads(old_content)
-        
-        # 合并新旧内容
-        updated_content = {**old_data, **content_update}
-        
-        # 更新数据库
-        cursor.execute(
-            "UPDATE memories SET content = ? WHERE id = ?",
-            (json.dumps(updated_content, ensure_ascii=False), mem_id)
-        )
-        conn.commit()
-        conn.close()
-        return True
     def get_memories(self, memory_type=None):
         """合并查询两个数据库的记忆"""
         results = []
     
-        # 先获取长期记忆
-        conn = sqlite3.connect(self.long_term_db)
-        cursor = conn.cursor()
+
     
-        query = "SELECT content FROM memories WHERE user_id = ?"
-        params = [self.user_id]
-    
-        if memory_type:
-            query += " AND memory_type = ?"
-            params.append(memory_type)
-        
-        query += " ORDER BY importance DESC, timestamp DESC"
-    
-        cursor.execute(query, params)
-        results.extend(json.loads(row[0]) for row in cursor.fetchall())
-        conn.close()
-    
-        # 再获取短期记忆
+        # 先获取短期记忆
         conn = sqlite3.connect(self.short_term_db)
         cursor = conn.cursor()
     
@@ -221,6 +171,23 @@ class MemoryStore:
             params.append(memory_type)
         
         query += " ORDER BY timestamp DESC"
+    
+        cursor.execute(query, params)
+        results.extend(json.loads(row[0]) for row in cursor.fetchall())
+        conn.close()
+        
+        # 再获取长期记忆
+        conn = sqlite3.connect(self.long_term_db)
+        cursor = conn.cursor()
+    
+        query = "SELECT content FROM memories WHERE user_id = ?"
+        params = [self.user_id]
+    
+        if memory_type:
+            query += " AND memory_type = ?"
+            params.append(memory_type)
+        
+        query += " ORDER BY importance DESC, timestamp DESC"
     
         cursor.execute(query, params)
         results.extend(json.loads(row[0]) for row in cursor.fetchall())
@@ -242,6 +209,32 @@ class MemoryStore:
             return None
         
         return result[0]
+    def get_memory_short(self):
+        """
+        查询最近的短期记忆
+        """
+        conn = sqlite3.connect(self.short_term_db)
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT content FROM memories WHERE user_id = ? ORDER BY timestamp DESC LIMIT 1
+        """, (self.user_id,))
+        result = cursor.fetchone()
+        if not result:
+            return None
+        return json.loads(result[0])
+    def get_memory_long(self):
+        """
+        查询最近的长期记忆
+        """
+        conn = sqlite3.connect(self.long_term_db)
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT content FROM memories WHERE user_id = ? ORDER BY timestamp DESC LIMIT 1
+        """, (self.user_id,))
+        result = cursor.fetchone()
+        if not result:
+            return None
+        return json.loads(result[0])
         
     
         
