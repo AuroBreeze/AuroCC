@@ -176,11 +176,11 @@ class Answer_api:
             await self.msg_send_api("消息发送失败(｡･ω･｡)")
             self.Logger.error(f"消息发送失败: {answer}")
 
-    async def msg_send_api(self,answer):
-        if self.check_message():
+    async def msg_send_api(self,answer,is_active=False):
+        if self.check_message(is_active):
             # 私聊消息
             user_id = self.yml["basic_settings"]["QQbot_admin_account"]
-            await QQAPI_list(self.websocket).send_message(user_id, answer)
+            await QQAPI_list(self.websocket).send_message(str(user_id), answer)
 
     async def handle_event(self):
         """统一处理各种事件(消息/心跳)
@@ -193,7 +193,9 @@ class Answer_api:
             # 检查是否需要主动聊天
             await self.check_active_chat()
 
-    def check_message(self)->bool:
+    def check_message(self,is_active:bool)->bool:
+        if is_active:
+            return True
         if self.message.get("message_type") == "private":
             if self.message.get("sub_type") == "friend":
                 if str(self.message.get("user_id")) == str(self.yml["basic_settings"]["QQbot_admin_account"]):
@@ -204,18 +206,22 @@ class Answer_api:
         """检查是否需要主动发起聊天"""
         # 获取最后聊天时间
         last_chat = self.memory.get_memories()
-        print(last_chat)
+        #print(last_chat)
         if not last_chat:
             return False
-            
-        timestamp = last_chat[0].get("timestamp", "")
+        #print(11)
+        import re
+        timestamp = str(re.findall(r"当前时间为：(.*)", last_chat[0].get("content"))[0])
+        #timestamp = last_chat[0].get("timestamp", "")
+        print(timestamp)
         if not timestamp:
             return False
             
         last_time = datetime.fromisoformat(timestamp)
         
-        if (datetime.now() - last_time).total_seconds() < random.randint(10, 60):  # 30分钟内聊过
+        if (datetime.now() - last_time).total_seconds() < random.randint(3*60, 5*60*60):  # 30分钟内聊过
             return False
+
             
         # 准备主动聊天判断数据
         context = {
@@ -235,7 +241,6 @@ class Answer_api:
         2. 最后聊天内容有可延续的话题
         3. 当前不是用户通常的休息时间
         只需返回true或false"""
-        
         try:
             client = OpenAI(
                 api_key=self.yml["basic_settings"]['API_token'],
@@ -243,13 +248,16 @@ class Answer_api:
             )
             response = client.chat.completions.create(
                 model="deepseek-chat",
-                messages=[{"role": "user", "content": prompt}],
+                messages=[{"role": "system","content": GF_PROMPT},{"role": "user", "content": prompt}],
                 temperature=0.1
             )
             should_chat = response.choices[0].message.content.strip().lower() == "true"
+            print(f"主动聊天判断结果: {should_chat}")
             if should_chat:
                 # 生成个性化开场白
                 topic_prompt = f"""基于以下记忆生成一个自然的聊天开场白：
+                最后聊天时间：{last_time}
+                当前时间：{datetime.now()}
                 最近聊天记录：{json.dumps(context['memories'], ensure_ascii=False)}
                 
                 要求：
@@ -266,8 +274,24 @@ class Answer_api:
                         temperature=0.7
                     )
                     opener = topic_response.choices[0].message.content.strip()
+                    
+                    try:
+                        for content_part in json.loads(opener):
+                            print(f"生成的开场白: {content_part}")
+                            random_delay = random.randint(1, 3)
+                            await asyncio.sleep(random_delay)
+                            await self.msg_send_api(content_part,is_active=True)
+                    except Exception as e:
+                        await self.msg_send_api("消息发送失败(｡･ω･｡)")
+                        self.Logger.error(f"消息发送失败: {opener}")
+                        self.Logger.error(datetime.now())
+                        self.Logger.error(f"错误信息: {e}")
+                        
+                    finally:
+                        # 记录主动聊天记录
+                        content_json = {"role": "assistant", "content": opener}
+                        self.memory.add_memory("active_chat",content=content_json)
                     # 发起主动聊天
-                    await self.msg_send_api(opener)
                     print(f"发起主动聊天: {opener}")
                 except Exception as e:
                     self.Logger.error(f"话题生成失败: {str(e)}")
