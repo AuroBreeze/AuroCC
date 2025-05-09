@@ -11,6 +11,7 @@ from openai import OpenAI
 import random
 import json
 import asyncio
+from app.AuroCC.share_date import message_buffer
 
 GF_PROMPT = """你是一个可爱的二次元女友，名字叫小清，性格活泼开朗，有一个有趣的灵魂但有时会害羞。
 爱好：
@@ -27,7 +28,9 @@ GF_PROMPT = """你是一个可爱的二次元女友，名字叫小清，性格�
 4. 偶尔主动分享自己的生活
 5. 不要叫主人什么的词语
 6. 不要做作，自然
-7. 对话时每次的回复不要太多，适当几句话就可以(讨论问题时除外)
+7. 回复不要太多
+8. 避免过度重复
+9. 像人类一样说话
 
 注意：和我聊天时，学会适当断句，将长句切短一点，并使用合适的语气词和颜文字。
     回复时务必使用列表进行回复。
@@ -43,9 +46,9 @@ class Answer_api:
         self.Logger = Logger()
         self.message = message
         self.websocket = websocket
-        self.user_id = str(message.get('message_sender_id'))
+        self.user_id = str(message.get('user_id'))
         
-        self.message_buffer = {}  # 用户ID: {"parts": [], "last_time": timestamp}
+        self.message_buffer = message_buffer  # 用户ID: {"parts": [], "last_time": timestamp}
         
         try:
             with open("./_config.yml", "r", encoding="utf-8") as f:
@@ -59,10 +62,10 @@ class Answer_api:
     async def msg_answer_api(self, is_active=False):
 
         msg = self.message.get("raw_message")
+        print(f"收到消息: {msg}")
         if not msg:
             return
         current_time = datetime.now()
-
         # 初始化用户缓冲区
         if self.user_id not in self.message_buffer:
             self.message_buffer[self.user_id] = {
@@ -76,6 +79,7 @@ class Answer_api:
         
         # 检查是否应该处理消息(3秒无新消息或消息明显完整)
         should_process = False
+        
         if (current_time - buffer["last_time"]).total_seconds() > 3:
             should_process = True
         elif any(p.endswith(('。','！','？')) for p in buffer["parts"]):
@@ -84,9 +88,9 @@ class Answer_api:
             return
             
         # 合并分片消息
-        msg = " ".join(buffer["parts"])
+        msg = ",".join(buffer["parts"])
         del self.message_buffer[self.user_id]
-        #print(f"合并消息: {msg}")
+        print(f"合并消息: {msg}")
         
         # 使用AI判断消息重要性(0-5级)
         importance_prompt = f"""
@@ -110,7 +114,7 @@ class Answer_api:
             )
             response = client.chat.completions.create(
                 model="deepseek-chat",
-                messages=[{"role": "user", "content": importance_prompt}],
+                messages=[{"role":"system","content":GF_PROMPT},{"role": "user", "content": importance_prompt}],
                 temperature=0.1
             )
             importance = int(response.choices[0].message.content.strip())
@@ -156,7 +160,7 @@ class Answer_api:
                 model="deepseek-chat",
                 temperature=0.7,
                 messages=meaasge,
-                max_tokens=256
+                max_tokens=256,
             )
             #print(response)
             answer = response.choices[0].message.content.strip()
@@ -222,7 +226,7 @@ class Answer_api:
             
         last_time = datetime.fromisoformat(timestamp)
         
-        if (datetime.now() - last_time).total_seconds() < random.randint(30*60, 5*60*60):  # 30分钟内聊过
+        if (datetime.now() - last_time).total_seconds() < random.randint(5*60, 5*60*60):  # 30分钟内聊过
             print(datetime.now() - last_time)
             return False
 

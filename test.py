@@ -24,7 +24,7 @@ messages=[
 response = client.chat.completions.create(
     model="deepseek-chat",
     messages=messages,
-    max_tokens=512,
+    max_tokens=80,
     )
 print(response)
 print("消耗的总token数：" + str(response.usage.total_tokens))
