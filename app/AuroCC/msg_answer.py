@@ -92,7 +92,7 @@ class Answer_api:
         # 合并分片消息
         msg = ",".join(buffer["parts"])
         del self.message_buffer[self.user_id]
-        print(f"合并消息: {msg}")
+        #print(f"合并消息: {msg}")
         
         # 使用AI判断消息重要性(0-5级)
         importance_prompt = f"""
@@ -168,7 +168,8 @@ class Answer_api:
             )
             #print(response)
             answer = response.choices[0].message.content.strip()
-            print(f"AI回复: {answer}")
+            #print(f"AI回复: {answer}")
+            self.Logger.info(f"AI回复: {answer}")
         except:
             answer = "我无法回答你的问题(｡･ω･｡)"
             self.Logger.error(f"AI回复错误: {answer}")
@@ -217,23 +218,18 @@ class Answer_api:
         """检查是否需要主动发起聊天"""
         # 获取最后聊天时间
         last_chat = self.memory.get_memories()
-        #print(last_chat)
         if not last_chat:
             return False
-        #print(11)
         import re
         timestamp = str(self.memory.get_memory_short_time())
-        #timestamp = last_chat[0].get("timestamp", "")
-        print(timestamp)
+
         if not timestamp:
             return False
             
         last_time = datetime.fromisoformat(timestamp)
         
         if (datetime.now() - last_time).total_seconds() < random.randint(5*60, 5*60*60):  # 30分钟内聊过
-            print(datetime.now() - last_time)
             return False
-
             
         # 准备主动聊天判断数据
         context = {
@@ -241,7 +237,6 @@ class Answer_api:
             "memories": self.memory.get_memories(),
             "current_time": datetime.now().isoformat()
         }
-        
         # 使用严格提示词判断
         prompt = f"""请根据以下条件判断是否需要主动发起聊天：
         最后聊天时间：{last_time}
@@ -268,6 +263,9 @@ class Answer_api:
             if should_chat:
                 # 生成个性化开场白
                 topic_prompt = f"""基于以下记忆生成一个自然的聊天开场白：
+                注意：
+                    要关注聊天的时间顺序。
+                
                 最后聊天时间：{last_time}
                 当前时间：{datetime.now()}
                 最近聊天记录：{json.dumps(context['memories'], ensure_ascii=False)}
@@ -289,7 +287,7 @@ class Answer_api:
                     
                     try:
                         for content_part in json.loads(opener):
-                            print(f"生成的开场白: {content_part}")
+                            #print(f"生成的开场白: {content_part}")
                             random_delay = random.randint(1, 3)
                             await asyncio.sleep(random_delay)
                             await self.msg_send_api(content_part,is_active=True)
@@ -303,7 +301,8 @@ class Answer_api:
                         content_json = {"role": "assistant", "content": opener}
                         self.memory.add_memory("active_chat",content=content_json)
                     # 发起主动聊天
-                    print(f"发起主动聊天: {opener}")
+                    #print(f"发起主动聊天: {opener}")
+                    self.Logger.info(f"发起主动聊天: {opener}")
                 except Exception as e:
                     self.Logger.error(f"话题生成失败: {str(e)}")
                     # 使用默认开场白
