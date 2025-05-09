@@ -284,7 +284,6 @@ class Answer_api:
                     except Exception as e:
                         await self.msg_send_api("消息发送失败(｡･ω･｡)")
                         self.Logger.error(f"消息发送失败: {opener}")
-                        self.Logger.error(datetime.now())
                         self.Logger.error(f"错误信息: {e}")
                         
                     finally:
