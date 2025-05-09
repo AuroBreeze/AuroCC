@@ -27,12 +27,14 @@ GF_PROMPT = """你是一个可爱的二次元女友，名字叫小清，性格�
 4. 偶尔主动分享自己的生活
 5. 不要叫主人什么的词语
 6. 不要做作，自然
+7. 对话时每次的回复不要太多，适当几句话就可以(讨论问题时除外)
 
 注意：和我聊天时，学会适当断句，将长句切短一点，并使用合适的语气词和颜文字。
     回复时务必使用列表进行回复。
     示例：
     我： 你好
     你： ["你好"，“请问有什么事情吗？”，“我在玩游戏”]
+务必进行列表的闭合
 
 """
 
@@ -154,6 +156,7 @@ class Answer_api:
                 model="deepseek-chat",
                 temperature=0.7,
                 messages=meaasge,
+                max_tokens=256
             )
             #print(response)
             answer = response.choices[0].message.content.strip()
@@ -211,7 +214,7 @@ class Answer_api:
             return False
         #print(11)
         import re
-        timestamp = str(re.findall(r"当前时间为：(.*)", last_chat[0].get("content"))[0])
+        timestamp = str(self.memory.get_memory_short_time())
         #timestamp = last_chat[0].get("timestamp", "")
         print(timestamp)
         if not timestamp:
@@ -219,7 +222,8 @@ class Answer_api:
             
         last_time = datetime.fromisoformat(timestamp)
         
-        if (datetime.now() - last_time).total_seconds() < random.randint(3*60, 5*60*60):  # 30分钟内聊过
+        if (datetime.now() - last_time).total_seconds() < random.randint(30*60, 5*60*60):  # 30分钟内聊过
+            print(datetime.now() - last_time)
             return False
 
             

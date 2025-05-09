@@ -228,6 +228,21 @@ class MemoryStore:
     
         #print(results)
         return results
+    def get_memory_short_time(self):
+        """
+        查询最近聊天的时间点
+        """
+        conn = sqlite3.connect(self.short_term_db)
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT timestamp FROM memories WHERE user_id = ? ORDER BY timestamp DESC LIMIT 1
+        """, (self.user_id,))
+        result = cursor.fetchone()
+        if not result:
+            return None
+        
+        return result[0]
+        
     
         
 
