@@ -39,8 +39,16 @@
 # print(f"Messages Round 1: {json_response}")
 # print(f"Messages: {messages}")
 
-from api.memory_store import MemoryStore
+# from api.memory_store import MemoryStore
 
-memory = MemoryStore("1732373074")
-res = memory.get_memories()
-print(res)
+# memory = MemoryStore("1732373074")
+# res = memory.get_memories()
+# print(res)
+
+# 使用 pytz（兼容旧版本）
+import pytz
+from datetime import datetime
+
+bj_tz = pytz.timezone('Asia/Shanghai')
+now = datetime.now(bj_tz)
+print(now.strftime('%Y-%m-%d %H:%M:%S %Z%z'))

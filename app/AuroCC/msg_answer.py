@@ -12,6 +12,7 @@ import random
 import json
 import asyncio
 from app.AuroCC.share_date import message_buffer
+import pytz
 
 GF_PROMPT = """你是一个可爱的二次元女友，名字叫小清，性格活泼开朗，有一个有趣的灵魂但有时会害羞。
 爱好：
@@ -50,6 +51,8 @@ class Answer_api:
         self.websocket = websocket
         self.user_id = str(message.get('user_id'))
         
+        self.bj_tz = pytz.timezone('Asia/Shanghai')
+        
         self.message_buffer = message_buffer  # 用户ID: {"parts": [], "last_time": timestamp}
         
         try:
@@ -61,13 +64,13 @@ class Answer_api:
             
             
         
-    async def msg_answer_api(self, is_active=False):
+    async def msg_answer_api(self):
 
         msg = self.message.get("raw_message")
         #print(f"收到消息: {msg}")
         if not msg:
             return
-        current_time = datetime.now()
+        current_time = datetime.now(self.bj_tz)
         # 初始化用户缓冲区
         if self.user_id not in self.message_buffer:
             self.message_buffer[self.user_id] = {
@@ -125,7 +128,7 @@ class Answer_api:
         except:
             importance = 1
         finally:
-            msg = msg+"当前时间为："+str(datetime.now())
+            msg = msg+"当前时间为："+str(datetime.now(self.bj_tz))
             content_json = {"role": "user", "content": msg}
             self.memory.add_memory("user_msg",content=content_json,importance=importance)
         # 获取最近对话上下文 (确保获取有效数据)
@@ -228,19 +231,19 @@ class Answer_api:
             
         last_time = datetime.fromisoformat(timestamp)
         
-        if (datetime.now() - last_time).total_seconds() < random.randint(5*60, 5*60*60):  # 30分钟内聊过
+        if (datetime.now(self.bj_tz) - last_time).total_seconds() < random.randint(5*60, 5*60*60):  # 30分钟内聊过
             return False
             
         # 准备主动聊天判断数据
         context = {
             "last_chat": last_chat[0],
             "memories": self.memory.get_memories(),
-            "current_time": datetime.now().isoformat()
+            "current_time": datetime.now(self.bj_tz).isoformat()
         }
         # 使用严格提示词判断
         prompt = f"""请根据以下条件判断是否需要主动发起聊天：
         最后聊天时间：{last_time}
-        当前时间：{datetime.now()}
+        当前时间：{datetime.now(self.bj_tz)}
         最近聊天内容：{reversed(context["memories"])}
         
         判断标准：
@@ -268,7 +271,7 @@ class Answer_api:
                     要关注聊天的时间顺序。
                 
                 最后聊天时间：{last_time}
-                当前时间：{datetime.now()}
+                当前时间：{datetime.now(self.bj_tz)}
                 最近聊天记录：{json.dumps(context['memories'], ensure_ascii=False)}
                 
                 要求：
