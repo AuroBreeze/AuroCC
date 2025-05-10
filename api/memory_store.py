@@ -53,7 +53,7 @@ class MemoryStore:
         0-普通 1-一般重要 2-重要 3-很重 4-非常重要 5-极其重要
         content: 可以是字符串或包含完整对话上下文的字典
         """
-        now = datetime.now().isoformat()
+        now = datetime.now(self.bj_tz).isoformat()
         
         # 处理content为字典或字符串
         if isinstance(content, dict):
@@ -94,7 +94,7 @@ class MemoryStore:
         
     def migrate_memories(self):
         """迁移记忆并清理过期记忆"""
-        week_ago = (datetime.now() - timedelta(days=7)).isoformat()
+        week_ago = (datetime.now(self.bj_tz) - timedelta(days=7)).isoformat()
         
         # 从短期库获取所有7天前的记忆
         conn = sqlite3.connect(self.short_term_db)
