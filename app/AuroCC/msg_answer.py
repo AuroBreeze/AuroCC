@@ -77,7 +77,9 @@ class Answer_api:
                 "parts": [],
                 "last_time": current_time
             }
-        
+        if datetime.now(self.bj_tz) - self.message_buffer[self.user_id]["last_time"] > timedelta(minutes=5):
+            self.message_buffer[self.user_id]["parts"] = []
+            
         buffer = self.message_buffer[self.user_id]
         buffer["parts"].append(msg)
         buffer["last_time"] = current_time
