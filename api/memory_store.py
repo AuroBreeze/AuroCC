@@ -92,38 +92,17 @@ class MemoryStore:
             conn.commit()
             conn.close()
         
-    def _calculate_next_review(self, timestamp, importance):
-        """根据艾宾浩斯遗忘曲线计算下次复习时间
-        0-普通: 1天
-        1-一般重要: 3天
-        2-重要: 7天
-        3-很重: 15天
-        4-非常重要: 30天
-        5-极其重要: 90天
-        """
-        from datetime import datetime, timedelta
-        now = datetime.now()
-        intervals = {
-            0: 1,
-            1: 3,
-            2: 7,
-            3: 15,
-            4: 30,
-            5: 90
-        }
-        return (now + timedelta(days=intervals.get(importance, 1))).isoformat()
-        
     def migrate_memories(self):
-        """迁移重要记忆到长期库并清理过期记忆"""
+        """迁移记忆并清理过期记忆"""
         week_ago = (datetime.now() - timedelta(days=7)).isoformat()
         
-        # 从短期库获取重要记忆(importance>=4)
+        # 从短期库获取所有7天前的记忆
         conn = sqlite3.connect(self.short_term_db)
         cursor = conn.cursor()
         cursor.execute("""
             SELECT timestamp, memory_type, content, importance 
             FROM memories 
-            WHERE user_id = ? AND importance >= 3 AND timestamp <= ?
+            WHERE user_id = ? AND timestamp <= ?
         """, (self.user_id, week_ago))
         
         important_memories = cursor.fetchall()
@@ -141,13 +120,26 @@ class MemoryStore:
                 VALUES (?, ?, ?, ?, ?, ?, ?)
             """, (self.user_id, timestamp, mem_type, content, imp, timestamp, next_review))
         
+        # 更新长期库中重要性<=3的记忆
+        long_cursor.execute("""
+            UPDATE memories 
+            SET importance = importance - 1 
+            WHERE user_id = ? AND importance <= 3
+        """, (self.user_id,))
+        
+        # 删除长期库中重要性为0的记忆
+        long_cursor.execute("""
+            DELETE FROM memories 
+            WHERE user_id = ? AND importance <= 0
+        """, (self.user_id,))
+        
         long_conn.commit()
         long_conn.close()
         
-        # 清理7天前的普通记忆
+        # 清理短期库中所有超过7天的记忆（不管重要性）
         cursor.execute("""
             DELETE FROM memories 
-            WHERE user_id = ? AND timestamp <= ? AND importance < 2
+            WHERE user_id = ? AND timestamp <= ?
         """, (self.user_id, week_ago))
         
         conn.commit()
@@ -158,7 +150,6 @@ class MemoryStore:
         results = []
     
 
-    
         # 先获取短期记忆
         conn = sqlite3.connect(self.short_term_db)
         cursor = conn.cursor()
