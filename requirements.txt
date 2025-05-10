@@ -1,5 +1,5 @@
 websockets
 colorlog
-aiohttp
 openai
 setuptools
+pyyaml

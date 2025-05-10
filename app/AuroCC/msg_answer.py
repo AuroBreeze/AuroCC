@@ -64,7 +64,7 @@ class Answer_api:
     async def msg_answer_api(self, is_active=False):
 
         msg = self.message.get("raw_message")
-        print(f"收到消息: {msg}")
+        #print(f"收到消息: {msg}")
         if not msg:
             return
         current_time = datetime.now()
@@ -247,6 +247,7 @@ class Answer_api:
         1. 用户没有明确表示不想聊天
         2. 最后聊天内容有可延续的话题
         3. 当前不是用户通常的休息时间
+        4. 自己没有道晚安或别的类似再见等等一段时间的命令
         只需返回true或false"""
         try:
             client = OpenAI(
