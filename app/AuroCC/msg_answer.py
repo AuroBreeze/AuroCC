@@ -180,15 +180,17 @@ class Answer_api:
             answer_json = {"role": "assistant", "content": answer}
             self.memory.add_memory("ai_msg",content=answer_json)
         
-        answer = json.loads(answer)
+        
         
         try:
+            answer = json.loads(answer)
+            
             for answer_part in answer:
                 random_delay = random.randint(1, 3)
                 await asyncio.sleep(random_delay)
                 await self.msg_send_api(answer_part)
         except:
-            await self.msg_send_api("消息发送失败(｡･ω･｡)")
+            await self.msg_send_api("消息发送失败啦，请稍后再试(｡･ω･｡)")
             self.Logger.error(f"消息发送失败: {answer}")
 
     async def msg_send_api(self,answer,is_active=False):
