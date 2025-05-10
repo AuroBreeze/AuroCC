@@ -10,15 +10,16 @@ services:
             - 8082:8082
             - 6099:6099
         container_name: napcat
-        network_mode: bridge
         restart: always
         image: mlikiowa/napcat-docker:latest
-    redis:
-        image: redis:latest
-        container_name: AuroCC-redis
-        ports:
-        - "6379:6379"
+    app:
+        build: .
         restart: always
+        container_name: AuroCC-app
+        depends_on:
+            - napcat
+        image: aurocc-bot:latest
+
 
 
 
