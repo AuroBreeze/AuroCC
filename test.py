@@ -1,5 +1,8 @@
 # Please install OpenAI SDK first: `pip3 install openai`
 
+# sudo xvfb-run -a qq --no-sandbox -q 271065523 
+# source .venv/bin/activate
+
 # from openai import OpenAI
 # import yaml
 # with open("_config.yml", "r",encoding="utf-8") as f:
