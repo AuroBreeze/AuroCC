@@ -43,7 +43,7 @@ class MemoryStore:
             content TEXT,
             importance INTEGER DEFAULT 2,
             last_reviewed DATETIME,
-            next_review DATETIME
+            next_review DATETIME DEFAULT 0
         )
         """)
         conn.commit()
@@ -83,13 +83,12 @@ class MemoryStore:
         
         # 重要记忆(importance>=3)直接添加到长期记忆库
         if importance >= 3:
-            next_review = self._calculate_next_review(now, importance)
             conn = sqlite3.connect(self.long_term_db)
             cursor = conn.cursor()
             cursor.execute(
                 "INSERT INTO memories (user_id, timestamp, memory_type, content, importance, last_reviewed, next_review) VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (self.user_id, now, memory_type, content_data, 
-                 importance, now, next_review)
+                 importance, now, 0)
             )
             conn.commit()
             conn.close()

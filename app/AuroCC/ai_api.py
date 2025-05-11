@@ -52,7 +52,7 @@ class AIApi:
             self.logger.error("Config file not found.")
             exit()
         
-        self.client = OpenAI(api_key=self.QQbot_admin_account,
+        self.client = OpenAI(api_key=self.config["basic_settings"]['API_token'],
                              base_url="https://api.deepseek.com")
         self.memory_store = MemoryStore(self.QQbot_admin_account)
         self.bj_tz = pytz.timezone('Asia/Shanghai')
@@ -71,7 +71,7 @@ class AIApi:
             #print(memories)
             if not memories:
                 # 数据库为空时初始化第一条记录
-                self.memory.add_memory("system_msg", {
+                self.memory_store.add_memory("system_msg", {
                     "content": "系统初始化",
                     "importance": 0
                 })
@@ -90,6 +90,7 @@ class AIApi:
             meaasge.append(memory)
             
         self.logger.info("获取到记忆")
+        #print(meaasge)
             
         response = self.client.chat.completions.create(
                 model="deepseek-chat",
@@ -107,7 +108,7 @@ class AIApi:
             self.logger.error(f"无法将AI回复解析为list数据: {answer}")
             self.logger.error(f"错误信息: {e}")
         finally:
-            answer_json = {"role": "assistant", "content": answer}
+            answer_json = {"role": "assistant", "content": str(answer)}
             self.memory_store.add_memory("ai_msg",content=answer_json)
         return answer
 
@@ -154,17 +155,17 @@ class AIApi:
         finally:
             msg = msg+"当前时间为："+str(datetime.now(self.bj_tz))
             content_json = {"role": "user", "content": msg}
-            self.memory.add_memory("user_msg",content=content_json,importance=importance)
+            self.memory_store.add_memory("user_msg",content=content_json,importance=importance)
     
     async def Get_check_active_chat(self):
         """
         生成主动聊天的内容
         """
                # 获取最后聊天时间
-        last_chat = self.memory.get_memories()
+        last_chat = self.memory_store.get_memories()
         if not last_chat:
             return False
-        timestamp = str(self.memory.get_memory_short_time())
+        timestamp = str(self.memory_store.get_memory_short_time())
 
         if not timestamp:
             return False
@@ -179,7 +180,7 @@ class AIApi:
         # 准备主动聊天判断数据
         context = {
             "last_chat": last_chat[0],
-            "memories": self.memory.get_memories(),
+            "memories": self.memory_store.get_memories(),
             "current_time": datetime.now(self.bj_tz).isoformat()
         }
         msg=[]
@@ -248,7 +249,7 @@ class AIApi:
                     finally:
                         # 记录主动聊天记录
                         content_json = {"role": "assistant", "content": opener}
-                        self.memory.add_memory("active_chat",content=content_json)
+                        self.memory_store.add_memory("active_chat",content=content_json)
                     # 发起主动聊天
                     #print(f"发起主动聊天: {opener}")
                     self.Logger.info(f"发起主动聊天: {opener}")
