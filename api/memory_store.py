@@ -107,21 +107,9 @@ class MemoryStore:
             WHERE user_id = ? AND timestamp <= ?
         """, (self.user_id, week_ago))
         
-        important_memories = cursor.fetchall()
-        
         # 添加到长期库
         long_conn = sqlite3.connect(self.long_term_db)
         long_cursor = long_conn.cursor()
-        
-        for mem in important_memories:
-            timestamp, mem_type, content, imp = mem
-            next_review = self._calculate_next_review(timestamp, imp)
-            long_cursor.execute("""
-                INSERT OR IGNORE INTO memories 
-                (user_id, timestamp, memory_type, content, importance, last_reviewed, next_review)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (self.user_id, timestamp, mem_type, content, imp, timestamp, next_review))
-        
         # 更新长期库中重要性<=3的记忆
         long_cursor.execute("""
             UPDATE memories 
