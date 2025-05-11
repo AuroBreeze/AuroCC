@@ -7,7 +7,7 @@ from api.Msg_dispatcher import Msg_dispatcher
 class Websocket_receiver:
     def __init__(self):
         self.logger = Logger()  # 实例化日志类
-        self.url = "ws://napcat:3001"  # 使用Docker服务名称代替localhost
+        self.url = "ws://127.0.0.1:3001"  # 使用Docker服务名称代替localhost
 
     async def msg_raw_receiver(self):
         self.logger.info("Starting Websocket Receiver")
