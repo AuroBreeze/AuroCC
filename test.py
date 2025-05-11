@@ -49,9 +49,13 @@
 # print(res)
 
 # 使用 pytz（兼容旧版本）
-import pytz
-from datetime import datetime
+# import pytz
+# from datetime import datetime
 
-bj_tz = pytz.timezone('Asia/Shanghai')
-now = datetime.now(bj_tz)
-print(now.strftime('%Y-%m-%d %H:%M:%S %Z%z'))
+# bj_tz = pytz.timezone('Asia/Shanghai')
+# now = datetime.now(bj_tz)
+# print(now.strftime('%Y-%m-%d %H:%M:%S %Z%z'))
+
+
+i = [1,4,2,5,12,4324,123,432,1235,23,123,1231]
+print(i[:-10])
