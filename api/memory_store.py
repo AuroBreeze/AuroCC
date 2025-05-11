@@ -94,8 +94,8 @@ class MemoryStore:
             conn.commit()
             conn.close()
         
-    def migrate_memories(self):
-        """迁移记忆并清理过期记忆"""
+    def clear_memories_long(self):
+        """清理7天的过期记忆"""
         week_ago = (datetime.now(self.bj_tz) - timedelta(days=7)).isoformat()
         
         # 从短期库获取所有7天前的记忆
@@ -134,6 +134,8 @@ class MemoryStore:
         
         conn.commit()
         conn.close()
+    def clear_memories_short(self):
+        pass
         
     def get_memories(self, memory_type=None):
         """合并查询两个数据库的记忆"""
