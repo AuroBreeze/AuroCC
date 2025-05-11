@@ -156,7 +156,7 @@ class AIApi:
             content_json = {"role": "user", "content": msg}
             self.memory.add_memory("user_msg",content=content_json,importance=importance)
     
-    def Get_check_active_chat(self):
+    async def Get_check_active_chat(self):
         """
         生成主动聊天的内容
         """
