@@ -12,6 +12,7 @@ import random
 import json
 import asyncio
 from app.AuroCC.share_date import message_buffer
+from app.AuroCC.ai_api import AIApi
 import pytz
 
 GF_PROMPT = """你是一个可爱的二次元女友，名字叫小清，性格活泼开朗，有一个有趣的灵魂但有时会害羞。
@@ -59,8 +60,9 @@ class Answer_api:
             with open("./_config.yml", "r", encoding="utf-8") as f:
                 self.yml = yaml.safe_load(f)
                 self.memory = MemoryStore(self.yml["basic_settings"]["QQbot_admin_account"])
-        except:
+        except Exception as e:
             self.Logger.error("配置文件config.yaml加载失败")
+            self.Logger.error(e)
             
             
         
@@ -133,60 +135,10 @@ class Answer_api:
             msg = msg+"当前时间为："+str(datetime.now(self.bj_tz))
             content_json = {"role": "user", "content": msg}
             self.memory.add_memory("user_msg",content=content_json,importance=importance)
-        # 获取最近对话上下文 (确保获取有效数据)
-        try:
-            memories = self.memory.get_memories()
-            #print("获取最近对话上下文...")
-            #print(memories)
-            if not memories:
-                # 数据库为空时初始化第一条记录
-                self.memory.add_memory("system_msg", {
-                    "content": "系统初始化",
-                    "importance": 0
-                })
-                memories = self.memory.get_memories()
-                if not memories:
-                    self.Logger.error("无法初始化记忆数据")
-                    return
-        except:
-            self.Logger.error("无法获取记忆数据")
             
-        meaasge = [{"role": "system", "content": GF_PROMPT}]
-        
-        for memory in reversed(memories):
-            meaasge.append(memory)
-            self.Logger.info(f"获取到记忆：{memory}")
-
-        #print(meaasge)
-        
-        # 获取回复
-        try:
-            client = OpenAI(
-                api_key=self.yml["basic_settings"]['API_token'],
-                base_url="https://api.deepseek.com"
-            )
-            response = client.chat.completions.create(
-                model="deepseek-chat",
-                temperature=0.7,
-                messages=meaasge,
-                max_tokens=256,
-            )
-            #print(response)
-            answer = response.choices[0].message.content.strip()
-            #print(f"AI回复: {answer}")
-            self.Logger.info(f"AI回复: {answer}")
-        except:
-            answer = "我无法回答你的问题(｡･ω･｡)"
-            self.Logger.error(f"AI回复错误: {answer}")
-        finally:
-            answer_json = {"role": "assistant", "content": answer}
-            self.memory.add_memory("ai_msg",content=answer_json)
-        
-        
+        answer = AIApi().Get_aurocc_response()
         
         try:
-            answer = json.loads(answer)
-            
             for answer_part in answer:
                 random_delay = random.randint(1, 3)
                 await asyncio.sleep(random_delay)
@@ -234,8 +186,10 @@ class Answer_api:
             return False
             
         last_time = datetime.fromisoformat(timestamp)
+        if last_time.tzinfo is None:
+            last_time = last_time.replace(tzinfo=pytz.utc)  # 假设timestamp是UTC时间
         
-        if (datetime.now(self.bj_tz) - last_time).total_seconds() < random.randint(5*60, 5*60*60):  # 30分钟内聊过
+        if (datetime.now(self.bj_tz) - last_time.astimezone(self.bj_tz)).total_seconds() < random.randint(5*60, 5*60*60):  # 30分钟内聊过
             return False
             
         # 准备主动聊天判断数据

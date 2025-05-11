@@ -3,12 +3,14 @@ import json
 from pathlib import Path
 from datetime import datetime, timedelta
 from .Logger_owner import Logger
+import pytz
 
 class MemoryStore:
     def __init__(self, user_id):
         self.user_id = str(user_id)
         self.short_term_db = Path(f"user_memories_short_{user_id}.db")
         self.long_term_db = Path(f"user_memories_long_{user_id}.db")
+        self.bj_tz = pytz.timezone('Asia/Shanghai')
         self._init_dbs()
         self.logger = Logger()
         
