@@ -43,7 +43,7 @@ class MemoryStore:
             content TEXT,
             importance INTEGER DEFAULT 2,
             last_reviewed DATETIME,
-            next_review DATETIME
+            next_review DATETIME DEFAULT 0
         )
         """)
         conn.commit()
@@ -83,19 +83,18 @@ class MemoryStore:
         
         # 重要记忆(importance>=3)直接添加到长期记忆库
         if importance >= 3:
-            next_review = self._calculate_next_review(now, importance)
             conn = sqlite3.connect(self.long_term_db)
             cursor = conn.cursor()
             cursor.execute(
                 "INSERT INTO memories (user_id, timestamp, memory_type, content, importance, last_reviewed, next_review) VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (self.user_id, now, memory_type, content_data, 
-                 importance, now, next_review)
+                 importance, now, 0)
             )
             conn.commit()
             conn.close()
         
-    def migrate_memories(self):
-        """迁移记忆并清理过期记忆"""
+    def clear_memories_long(self):
+        """清理7天的过期记忆"""
         week_ago = (datetime.now(self.bj_tz) - timedelta(days=7)).isoformat()
         
         # 从短期库获取所有7天前的记忆
@@ -107,21 +106,9 @@ class MemoryStore:
             WHERE user_id = ? AND timestamp <= ?
         """, (self.user_id, week_ago))
         
-        important_memories = cursor.fetchall()
-        
         # 添加到长期库
         long_conn = sqlite3.connect(self.long_term_db)
         long_cursor = long_conn.cursor()
-        
-        for mem in important_memories:
-            timestamp, mem_type, content, imp = mem
-            next_review = self._calculate_next_review(timestamp, imp)
-            long_cursor.execute("""
-                INSERT OR IGNORE INTO memories 
-                (user_id, timestamp, memory_type, content, importance, last_reviewed, next_review)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (self.user_id, timestamp, mem_type, content, imp, timestamp, next_review))
-        
         # 更新长期库中重要性<=3的记忆
         long_cursor.execute("""
             UPDATE memories 
@@ -146,6 +133,8 @@ class MemoryStore:
         
         conn.commit()
         conn.close()
+    def clear_memories_short(self):
+        pass
         
     def get_memories(self, memory_type=None):
         """合并查询两个数据库的记忆"""
