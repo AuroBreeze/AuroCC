@@ -99,6 +99,7 @@ class AIApi:
                 max_tokens=256,
             )
         answer = response.choices[0].message.content.strip()
+        self.logger.info(f"AI回复: {answer}")
         
         try:
             answer = json.loads(answer)

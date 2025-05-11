@@ -105,10 +105,14 @@ class Answer_api:
         answer = AIApi().Get_aurocc_response() # 获取AI的回答
         
         try:
-            for answer_part in answer:
-                random_delay = random.randint(1, 3)
-                await asyncio.sleep(random_delay)
-                await self.msg_send_api(answer_part)
+            if type(answer) is list:
+                for answer_part in answer:
+                    random_delay = random.randint(1, 3)
+                    await asyncio.sleep(random_delay)
+                    await self.msg_send_api(answer_part)
+            else:
+                await self.msg_send_api(answer)
+
         except Exception as e:
             await self.msg_send_api("消息发送失败啦，请稍后再试(｡･ω･｡)")
             self.Logger.error(f"消息发送失败: {answer}")
