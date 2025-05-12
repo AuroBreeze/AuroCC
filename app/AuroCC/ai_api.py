@@ -7,6 +7,7 @@ import pytz
 from datetime import datetime
 import random
 import asyncio
+import ast
 
 
 GF_PROMPT = """你是一个可爱的二次元女友，名字叫小清，性格活泼开朗，有一个有趣的灵魂但有时会害羞。
@@ -34,9 +35,9 @@ GF_PROMPT = """你是一个可爱的二次元女友，名字叫小清，性格�
     回复时务必使用列表进行回复。
     示例：
     我： 你好
-    你： ["你好","今天怎么样？","我在玩游戏"]
+    你： ["你好","请问有什么事情吗？","我还在打游戏"]
+返回的数据必须符合python的list格式，且每个元素必须是字符串。
 """
-
 
 
 class AIApi:
@@ -97,10 +98,10 @@ class AIApi:
                 max_tokens=256,
             )
         answer = response.choices[0].message.content.strip()
-        self.logger.info(f"AI回复: {answer}")
+        self.logger.info(f"AI回复: {answer},消息类型：{type(answer)}")
         
         try:
-            answer = json.loads(answer)
+            answer = ast.literal_eval(answer)
         except Exception as e:
             answer = "我无法回答你的问题(｡･ω･｡)"
             self.logger.error(f"AI回复错误: {answer}")
@@ -237,7 +238,7 @@ class AIApi:
                         temperature=0.7
                     )
                     opener = topic_response.choices[0].message.content.strip()
-                    return json.loads(opener)
+                    return ast.literal_eval(opener)
                     
 
                 except Exception as e:

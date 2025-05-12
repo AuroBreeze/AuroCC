@@ -56,6 +56,7 @@
 # now = datetime.now(bj_tz)
 # print(now.strftime('%Y-%m-%d %H:%M:%S %Z%z'))
 
-
-i = [1,4,2,5,12,4324,123,432,1235,23,123,1231]
-print(i[:-10])
+import json
+import ast
+i = str(['(⊙ˍ⊙) 诶？', '这是新型密码吗', '还是在测试', '我的反应呀~', '不管怎样', '收到指令！', '✧٩(ˊωˋ*)و✧'])
+print(ast.literal_eval(i)[4])
