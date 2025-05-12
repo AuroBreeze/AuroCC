@@ -7,6 +7,7 @@ import pytz
 from datetime import datetime
 import random
 import asyncio
+import ast
 
 
 GF_PROMPT = """你是一个可爱的二次元女友，名字叫小清，性格活泼开朗，有一个有趣的灵魂但有时会害羞。
@@ -34,11 +35,9 @@ GF_PROMPT = """你是一个可爱的二次元女友，名字叫小清，性格�
     回复时务必使用列表进行回复。
     示例：
     我： 你好
-    你： ["你好"，“请问有什么事情吗？”，“我在玩游戏”]
-务必进行列表的闭合
-
+    你： ["你好","请问有什么事情吗？","我还在打游戏"]
+返回的数据必须符合python的list格式，且每个元素必须是字符串。
 """
-
 
 
 class AIApi:
@@ -99,10 +98,10 @@ class AIApi:
                 max_tokens=256,
             )
         answer = response.choices[0].message.content.strip()
-        self.logger.info(f"AI回复: {answer}")
+        self.logger.info(f"AI回复: {answer},消息类型：{type(answer)}")
         
         try:
-            answer = json.loads(answer)
+            answer = ast.literal_eval(answer)
         except Exception as e:
             answer = "我无法回答你的问题(｡･ω･｡)"
             self.logger.error(f"AI回复错误: {answer}")
@@ -158,25 +157,28 @@ class AIApi:
             content_json = {"role": "user", "content": msg}
             self.memory_store.add_memory("user_msg",content=content_json,importance=importance)
     
-    async def Get_check_active_chat(self):
+    def Get_check_active_chat(self)->list:
         """
-        生成主动聊天的内容
+        生成主动聊天的内容，并进行返回
+
+        Returns:
+            list: 主动聊天的内容
         """
                # 获取最后聊天时间
         last_chat = self.memory_store.get_memories()
         if not last_chat:
-            return False
+            return []
         timestamp = str(self.memory_store.get_memory_short_time())
 
         if not timestamp:
-            return False
+            return []
             
         last_time = datetime.fromisoformat(timestamp)
         if last_time.tzinfo is None:
             last_time = last_time.replace(tzinfo=pytz.utc)  # 假设timestamp是UTC时间
         
         if (datetime.now(self.bj_tz) - last_time.astimezone(self.bj_tz)).total_seconds() < random.randint(5*60, 5*60*60):  # 30分钟内聊过
-            return False
+            return []
             
         # 准备主动聊天判断数据
         context = {
@@ -201,7 +203,7 @@ class AIApi:
         只需返回true或false"""
         try:
             client = OpenAI(
-                api_key=self.yml["basic_settings"]['API_token'],
+                api_key=self.config["basic_settings"]['API_token'],
                 base_url="https://api.deepseek.com"
             )
             response = client.chat.completions.create(
@@ -210,7 +212,8 @@ class AIApi:
                 temperature=0.1
             )
             should_chat = response.choices[0].message.content.strip().lower() == "true"
-            print(f"主动聊天判断结果: {should_chat}")
+            #print(f"主动聊天判断结果: {should_chat}")
+            self.logger.info(f"主动聊天判断结果: {should_chat}")
             if should_chat:
                 # 生成个性化开场白
                 topic_prompt = f"""基于以下记忆生成一个自然的聊天开场白：
@@ -235,31 +238,19 @@ class AIApi:
                         temperature=0.7
                     )
                     opener = topic_response.choices[0].message.content.strip()
+                    return ast.literal_eval(opener)
                     
-                    try:
-                        for content_part in json.loads(opener):
-                            #print(f"生成的开场白: {content_part}")
-                            random_delay = random.randint(1, 3)
-                            await asyncio.sleep(random_delay)
-                            await self.msg_send_api(content_part,is_active=True)
-                    except Exception as e:
-                        await self.msg_send_api("消息发送失败(｡･ω･｡)")
-                        self.Logger.error(f"消息发送失败: {opener}")
-                        self.Logger.error(f"错误信息: {e}")
-                        
-                    finally:
-                        # 记录主动聊天记录
-                        content_json = {"role": "assistant", "content": opener}
-                        self.memory_store.add_memory("active_chat",content=content_json)
-                    # 发起主动聊天
-                    #print(f"发起主动聊天: {opener}")
-                    self.Logger.info(f"发起主动聊天: {opener}")
+
                 except Exception as e:
-                    self.Logger.error(f"话题生成失败: {str(e)}")
+                    self.logger.error(f"话题生成失败: {str(e)}")
                     # 使用默认开场白
-                    await self.msg_answer_api("最近过得怎么样呀？(｡･ω･｡)ﾉ♡", is_active=True)
+                    #await self.msg_answer_api("最近过得怎么样呀？(｡･ω･｡)ﾉ♡", is_active=True)
+                    msg = ["最近过得怎么样呀？(｡･ω･｡)ﾉ♡"]
+                    return msg
+            
+            return []
         except Exception as e:
-            self.Logger.error(f"主动聊天判断失败: {str(e)}")
+            self.logger.error(f"主动聊天判断失败: {str(e)}")
         
         
 

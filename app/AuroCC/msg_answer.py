@@ -40,14 +40,13 @@ GF_PROMPT = """你是一个可爱的二次元女友，名字叫小清，性格�
     回复时务必使用列表进行回复。
     示例：
     我： 你好
-    你： ["你好"，“请问有什么事情吗？”，“我在玩游戏”]
-务必进行列表的闭合
-
+    你： ["你好","请问有什么事情吗？","我还在打游戏"]
+返回的数据必须符合python的list格式，且每个元素必须是字符串。
 """
 
 class Answer_api:
     def __init__(self, websocket, message:dict):
-        self.Logger = Logger()
+        self.logger = Logger()
         self.message = message
         self.websocket = websocket
         self.user_id = str(message.get('user_id'))
@@ -61,8 +60,8 @@ class Answer_api:
                 self.yml = yaml.safe_load(f)
                 self.memory = MemoryStore(self.yml["basic_settings"]["QQbot_admin_account"])
         except Exception as e:
-            self.Logger.error("配置文件config.yaml加载失败")
-            self.Logger.error(e)
+            self.logger.error("配置文件config.yaml加载失败")
+            self.logger.error(e)
             
             
         
@@ -115,8 +114,8 @@ class Answer_api:
 
         except Exception as e:
             await self.msg_send_api("消息发送失败啦，请稍后再试(｡･ω･｡)")
-            self.Logger.error(f"消息发送失败: {answer}")
-            self.Logger.error(f"错误信息: {e}")
+            self.logger.error(f"消息发送失败: {answer}")
+            self.logger.error(f"错误信息: {e}")
 
     async def msg_send_api(self,answer,is_active=False):
         if self.check_message(is_active):
@@ -133,7 +132,7 @@ class Answer_api:
             await self.msg_answer_api()
         elif self.message.get("post_type") == "meta_event" and self.message.get("meta_event_type") == "heartbeat":
             # 检查是否需要主动聊天
-            await AIApi().Get_check_active_chat()
+            await self.active_chat()
 
     def check_message(self,is_active:bool)->bool:
         if is_active:
@@ -144,100 +143,33 @@ class Answer_api:
                     return True
         return False
 
-    # async def check_active_chat(self):
-    #     """检查是否需要主动发起聊天"""
-    #     # 获取最后聊天时间
-    #     last_chat = self.memory.get_memories()
-    #     if not last_chat:
-    #         return False
-    #     timestamp = str(self.memory.get_memory_short_time())
-
-    #     if not timestamp:
-    #         return False
+    async def active_chat(self):
+        msg = AIApi().Get_check_active_chat()
+        self.logger.debug(f"主动聊天: {msg}")
+        if type(msg) != list:
+            msg = ["最近过得怎么样呀？(｡･ω･｡)ﾉ♡"]
+        if msg == []:
+            return
             
-    #     last_time = datetime.fromisoformat(timestamp)
-    #     if last_time.tzinfo is None:
-    #         last_time = last_time.replace(tzinfo=pytz.utc)  # 假设timestamp是UTC时间
-        
-    #     if (datetime.now(self.bj_tz) - last_time.astimezone(self.bj_tz)).total_seconds() < random.randint(5*60, 5*60*60):  # 30分钟内聊过
-    #         return False
-            
-    #     # 准备主动聊天判断数据
-    #     context = {
-    #         "last_chat": last_chat[0],
-    #         "memories": self.memory.get_memories(),
-    #         "current_time": datetime.now(self.bj_tz).isoformat()
-    #     }
-    #     # 使用严格提示词判断
-    #     prompt = f"""请根据以下条件判断是否需要主动发起聊天：
-    #     最后聊天时间：{last_time}
-    #     当前时间：{datetime.now(self.bj_tz)}
-    #     最近聊天内容：{reversed(context["memories"])}
-        
-    #     判断标准：
-    #     1. 用户没有明确表示不想聊天
-    #     2. 最后聊天内容有可延续的话题
-    #     3. 当前不是用户通常的休息时间
-    #     4. 自己没有道晚安或别的类似再见等等一段时间的命令
-    #     只需返回true或false"""
-    #     try:
-    #         client = OpenAI(
-    #             api_key=self.yml["basic_settings"]['API_token'],
-    #             base_url="https://api.deepseek.com"
-    #         )
-    #         response = client.chat.completions.create(
-    #             model="deepseek-chat",
-    #             messages=[{"role": "system","content": GF_PROMPT},{"role": "user", "content": prompt}],
-    #             temperature=0.1
-    #         )
-    #         should_chat = response.choices[0].message.content.strip().lower() == "true"
-    #         print(f"主动聊天判断结果: {should_chat}")
-    #         if should_chat:
-    #             # 生成个性化开场白
-    #             topic_prompt = f"""基于以下记忆生成一个自然的聊天开场白：
-    #             注意：
-    #                 要关注聊天的时间顺序。
-                
-    #             最后聊天时间：{last_time}
-    #             当前时间：{datetime.now(self.bj_tz)}
-    #             最近聊天记录：{json.dumps(context['memories'], ensure_ascii=False)}
-                
-    #             要求：
-    #             1. 使用可爱的语气和颜文字
-    #             2. 可以结合之前的聊天内容
-    #             3. 自然不做作
-    #             4. 可以是关心、分享或提问
-    #             只需返回生成的开场白内容"""
-                
-    #             try:
-    #                 topic_response = client.chat.completions.create(
-    #                     model="deepseek-chat",
-    #                     messages=[{"role":"system","content":GF_PROMPT},{"role": "user", "content": topic_prompt}],
-    #                     temperature=0.7
-    #                 )
-    #                 opener = topic_response.choices[0].message.content.strip()
-                    
-    #                 try:
-    #                     for content_part in json.loads(opener):
-    #                         #print(f"生成的开场白: {content_part}")
-    #                         random_delay = random.randint(1, 3)
-    #                         await asyncio.sleep(random_delay)
-    #                         await self.msg_send_api(content_part,is_active=True)
-    #                 except Exception as e:
-    #                     await self.msg_send_api("消息发送失败(｡･ω･｡)")
-    #                     self.Logger.error(f"消息发送失败: {opener}")
-    #                     self.Logger.error(f"错误信息: {e}")
+        try:
+            for content_part in msg:
+                #print(f"生成的开场白: {content_part}")
+                random_delay = random.randint(1, 3)
+                await asyncio.sleep(random_delay)
+                await self.msg_send_api(content_part,is_active=True)
+        except Exception as e:
+                await self.msg_send_api("消息发送失败(｡･ω･｡)")
+                self.logger.error(f"消息发送失败: {msg}")
+                self.logger.error(f"错误信息: {e}")
                         
-    #                 finally:
-    #                     # 记录主动聊天记录
-    #                     content_json = {"role": "assistant", "content": opener}
-    #                     self.memory.add_memory("active_chat",content=content_json)
-    #                 # 发起主动聊天
-    #                 #print(f"发起主动聊天: {opener}")
-    #                 self.Logger.info(f"发起主动聊天: {opener}")
-    #             except Exception as e:
-    #                 self.Logger.error(f"话题生成失败: {str(e)}")
-    #                 # 使用默认开场白
-    #                 await self.msg_answer_api("最近过得怎么样呀？(｡･ω･｡)ﾉ♡", is_active=True)
-    #     except Exception as e:
-    #         self.Logger.error(f"主动聊天判断失败: {str(e)}")
+        finally:
+            # 记录主动聊天记录
+            content_json = {"role": "assistant", "content": msg}
+            self.memory.add_memory("active_chat",content=content_json)
+            # 发起主动聊天
+            #print(f"发起主动聊天: {opener}")
+            self.logger.info(f"发起主动聊天: {msg}")
+        
+
+        
+        

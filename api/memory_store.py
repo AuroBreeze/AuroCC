@@ -41,9 +41,7 @@ class MemoryStore:
             timestamp DATETIME,
             memory_type TEXT,
             content TEXT,
-            importance INTEGER DEFAULT 2,
-            last_reviewed DATETIME,
-            next_review DATETIME DEFAULT 0
+            importance INTEGER DEFAULT 2
         )
         """)
         conn.commit()
@@ -86,9 +84,8 @@ class MemoryStore:
             conn = sqlite3.connect(self.long_term_db)
             cursor = conn.cursor()
             cursor.execute(
-                "INSERT INTO memories (user_id, timestamp, memory_type, content, importance, last_reviewed, next_review) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (self.user_id, now, memory_type, content_data, 
-                 importance, now, 0)
+                "INSERT INTO memories (user_id, timestamp, memory_type, content, importance) VALUES (?, ?, ?, ?, ?)",
+                (self.user_id, now, memory_type, content_data, importance)
             )
             conn.commit()
             conn.close()
@@ -134,8 +131,20 @@ class MemoryStore:
         conn.commit()
         conn.close()
     def clear_memories_short(self):
-        pass
+        """
+        删除两天前的重要性小于3的记忆
+        """
+        conn = sqlite3.connect(self.short_term_db)
+        cursor = conn.cursor()
+        cursor.execute("""
+            DELETE FROM memories 
+            WHERE user_id = ? AND importance < 3 AND timestamp < ?
+        """, (self.user_id, (datetime.now(self.bj_tz) - timedelta(days=2)).isoformat()))
+        conn.commit()
+        conn.close()
         
+        
+    
     def get_memories(self, memory_type=None):
         """合并查询两个数据库的记忆"""
         results = []

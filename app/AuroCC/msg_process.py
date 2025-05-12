@@ -11,4 +11,5 @@ class MsgProcess:
     def Extract_msg_center(self):
         # Extract msg center from memory store
         
+        
         pass
