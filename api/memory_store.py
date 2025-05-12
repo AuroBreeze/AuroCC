@@ -21,7 +21,8 @@ class MemoryStore:
         # 新增向量索引相关属性
         
         # 改用支持中文更好的模型
-        self.embedder = SentenceTransformer("./local_model")
+        self.embedder = SentenceTransformer("./local_model") # 加载本地模型
+        # self.embedder = SentenceTransformer("distilbert-base-nli-stsb-mean-tokens") # 加载中文模型
         self.dim = self.embedder.get_sentence_embedding_dimension()  # 与模型维度一致
         self.short_term_index = faiss.IndexFlatL2(self.dim)
         self.long_term_index = faiss.IndexFlatL2(self.dim)
