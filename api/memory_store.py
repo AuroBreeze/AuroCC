@@ -187,6 +187,27 @@ class MemoryStore:
         self.long_term_index = faiss.read_index(f"user_{self.user_id}_long.index")
         with open(f"user_{self.user_id}_mapping.pkl", 'rb') as f:
             self.id_mapping = pickle.load(f)
+            
+    def debug_status(self):
+        """打印系统状态"""
+        # 数据库记录数
+        conn_short = sqlite3.connect(self.short_term_db)
+        count_short = conn_short.execute("SELECT COUNT(*) FROM memories").fetchone()[0]
+        conn_short.close()
+    
+        conn_long = sqlite3.connect(self.long_term_db)
+        count_long = conn_long.execute("SELECT COUNT(*) FROM memories").fetchone()[0]
+        conn_long.close()
+    
+        # 索引状态
+        print(f"""
+        === MemoryStore 调试信息 ===
+        短期记忆库记录数: {count_short}
+        长期记忆库记录数: {count_long}
+        短期索引数量: {self.short_term_index.ntotal}
+        长期索引数量: {self.long_term_index.ntotal}
+        最后检索耗时: {self.last_search_time:.2f}ms
+        """)
     def clear_memories_long(self):
         """清理7天的过期记忆"""
         week_ago = (datetime.now(self.bj_tz) - timedelta(days=7)).isoformat()
@@ -240,7 +261,25 @@ class MemoryStore:
         conn.commit()
         conn.close()
         
+        self._rebuild_index('short')
+    
+    def _rebuild_index(self, index_type):
+        """全量重建指定索引"""
+        conn = sqlite3.connect(getattr(self, f"{index_type}_term_db"))
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, content FROM memories")
+        vectors = [self.embedder.encode(json.loads(row[1])['content']) for row in cursor]
+        getattr(self, f"{index_type}_term_index").reset()
+        getattr(self, f"{index_type}_term_index").add(np.array(vectors).astype('float32'))
+        self.id_mapping[index_type] = {i: row[0] for i, row in enumerate(cursor)}
+        conn.close()
+    
+    def rebuild_all_indexes(self):
+        """全量重建所有索引"""
+        self._rebuild_index('short')
+        self._rebuild_index('long')
         
+    
     
     def get_memories(self, memory_type=None):
         """合并查询两个数据库的记忆"""
@@ -325,5 +364,3 @@ class MemoryStore:
         return json.loads(result[0])
         
     
-        
-
