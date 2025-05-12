@@ -1,15 +1,12 @@
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-import json
 from datetime import datetime, timedelta
 from api.Logger_owner import Logger
 from api.Botapi import QQAPI_list
 from api.memory_store import MemoryStore
 import yaml
-from openai import OpenAI
 import random
-import json
 import asyncio
 from app.AuroCC.share_date import message_buffer
 from app.AuroCC.ai_api import AIApi
@@ -128,7 +125,7 @@ class Answer_api:
         Args:
             message: 事件数据
         """
-        if self.message.get("raw_message") != None:
+        if self.message.get("raw_message") is not None:
             await self.msg_answer_api()
         elif self.message.get("post_type") == "meta_event" and self.message.get("meta_event_type") == "heartbeat":
             # 检查是否需要主动聊天
@@ -146,7 +143,7 @@ class Answer_api:
     async def active_chat(self):
         msg = AIApi().Get_check_active_chat()
         self.logger.debug(f"主动聊天: {msg}")
-        if type(msg) != list:
+        if type(msg) is not list:
             msg = ["最近过得怎么样呀？(｡･ω･｡)ﾉ♡"]
         if msg == []:
             return
