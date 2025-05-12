@@ -167,3 +167,6 @@ cython_debug/
 #.idea/
 _config.yml
 local_model
+*.db
+*.index
+*.pkl
