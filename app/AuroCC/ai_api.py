@@ -210,7 +210,8 @@ class AIApi:
                 temperature=0.1
             )
             should_chat = response.choices[0].message.content.strip().lower() == "true"
-            print(f"主动聊天判断结果: {should_chat}")
+            #print(f"主动聊天判断结果: {should_chat}")
+            self.logger.info(f"主动聊天判断结果: {should_chat}")
             if should_chat:
                 # 生成个性化开场白
                 topic_prompt = f"""基于以下记忆生成一个自然的聊天开场白：
@@ -244,8 +245,8 @@ class AIApi:
                             await self.msg_send_api(content_part,is_active=True)
                     except Exception as e:
                         await self.msg_send_api("消息发送失败(｡･ω･｡)")
-                        self.Logger.error(f"消息发送失败: {opener}")
-                        self.Logger.error(f"错误信息: {e}")
+                        self.logger.error(f"消息发送失败: {opener}")
+                        self.logger.error(f"错误信息: {e}")
                         
                     finally:
                         # 记录主动聊天记录
@@ -253,13 +254,13 @@ class AIApi:
                         self.memory_store.add_memory("active_chat",content=content_json)
                     # 发起主动聊天
                     #print(f"发起主动聊天: {opener}")
-                    self.Logger.info(f"发起主动聊天: {opener}")
+                    self.logger.info(f"发起主动聊天: {opener}")
                 except Exception as e:
-                    self.Logger.error(f"话题生成失败: {str(e)}")
+                    self.logger.error(f"话题生成失败: {str(e)}")
                     # 使用默认开场白
                     await self.msg_answer_api("最近过得怎么样呀？(｡･ω･｡)ﾉ♡", is_active=True)
         except Exception as e:
-            self.Logger.error(f"主动聊天判断失败: {str(e)}")
+            self.logger.error(f"主动聊天判断失败: {str(e)}")
         
         
 

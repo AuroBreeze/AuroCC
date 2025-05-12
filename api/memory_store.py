@@ -41,9 +41,7 @@ class MemoryStore:
             timestamp DATETIME,
             memory_type TEXT,
             content TEXT,
-            importance INTEGER DEFAULT 2,
-            last_reviewed DATETIME,
-            next_review DATETIME DEFAULT 0
+            importance INTEGER DEFAULT 2
         )
         """)
         conn.commit()
@@ -86,9 +84,8 @@ class MemoryStore:
             conn = sqlite3.connect(self.long_term_db)
             cursor = conn.cursor()
             cursor.execute(
-                "INSERT INTO memories (user_id, timestamp, memory_type, content, importance, last_reviewed, next_review) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (self.user_id, now, memory_type, content_data, 
-                 importance, now, 0)
+                "INSERT INTO memories (user_id, timestamp, memory_type, content, importance) VALUES (?, ?, ?, ?, ?)",
+                (self.user_id, now, memory_type, content_data, importance)
             )
             conn.commit()
             conn.close()
