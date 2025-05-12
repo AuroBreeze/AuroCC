@@ -34,9 +34,7 @@ GF_PROMPT = """你是一个可爱的二次元女友，名字叫小清，性格�
     回复时务必使用列表进行回复。
     示例：
     我： 你好
-    你： ["你好"，“请问有什么事情吗？”，“我在玩游戏”]
-务必进行列表的闭合
-
+    你： ["你好","今天怎么样？","我在玩游戏"]
 """
 
 
@@ -201,7 +199,7 @@ class AIApi:
         只需返回true或false"""
         try:
             client = OpenAI(
-                api_key=self.yml["basic_settings"]['API_token'],
+                api_key=self.config["basic_settings"]['API_token'],
                 base_url="https://api.deepseek.com"
             )
             response = client.chat.completions.create(
