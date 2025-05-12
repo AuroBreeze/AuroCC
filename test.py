@@ -61,13 +61,25 @@
 # i = str(['(⊙ˍ⊙) 诶？', '这是新型密码吗', '还是在测试', '我的反应呀~', '不管怎样', '收到指令！', '✧٩(ˊωˋ*)و✧'])
 # print(ast.literal_eval(i)[4])
 
+# from api.memory_store import MemoryStore
+
+# memory = MemoryStore("1732373074")
+# res = memory.get_memories()
+# msg = [1,2,3,4,5,6,8]
+# mes = []
+# for i in reversed(res):
+#     mes.append(i)
+# print(msg[-2:])
+# print(mes[-5:])
+
+# python -c "from sentence_transformers import SentenceTransformer; model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2'); model.save('local_model')"
 from api.memory_store import MemoryStore
 
 memory = MemoryStore("1732373074")
-res = memory.get_memories()
-msg = [1,2,3,4,5,6,8]
-mes = []
-for i in reversed(res):
-    mes.append(i)
-print(msg[-2:])
-print(mes[-5:])
+res = memory.search_memories("debug",top_k=3,time_weight=0.4)
+
+for i in res:
+    print(f"[相关度:{i['score']:.2f}] {i['content']['content']}")
+
+
+        

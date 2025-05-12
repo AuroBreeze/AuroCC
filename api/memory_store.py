@@ -4,6 +4,10 @@ from pathlib import Path
 from datetime import datetime, timedelta
 from .Logger_owner import Logger
 import pytz
+import faiss
+import numpy as np
+from sentence_transformers import SentenceTransformer
+import pickle  # 新增导入
 
 class MemoryStore:
     def __init__(self, user_id):
@@ -13,6 +17,15 @@ class MemoryStore:
         self.bj_tz = pytz.timezone('Asia/Shanghai')
         self._init_dbs()
         self.logger = Logger()
+        
+        # 新增向量索引相关属性
+        
+        # 改用支持中文更好的模型
+        self.embedder = SentenceTransformer('distiluse-base-multilingual-cased-v2')
+        self.dim = 384  # 与模型维度一致
+        self.short_term_index = faiss.IndexFlatL2(self.dim)
+        self.long_term_index = faiss.IndexFlatL2(self.dim)
+        self.id_mapping = {'short': {}, 'long': {}}  # FAISS ID -> 数据库ID
         
     def _init_dbs(self):
         # 短期记忆库(保存7天)
@@ -72,9 +85,10 @@ class MemoryStore:
                 "INSERT INTO memories (user_id, timestamp, memory_type, content, importance) VALUES (?, ?, ?, ?, ?)",
                 (self.user_id, now, memory_type, content_data, int(importance))
             )
+            new_short_id = cursor.lastrowid
             conn.commit()
         except sqlite3.Error as e:
-            self.Logger.error(f"存储记忆失败: {str(e)}")
+            self.logger.error(f"存储记忆失败: {str(e)}")
             raise
         finally:
             conn.close()
@@ -87,9 +101,91 @@ class MemoryStore:
                 "INSERT INTO memories (user_id, timestamp, memory_type, content, importance) VALUES (?, ?, ?, ?, ?)",
                 (self.user_id, now, memory_type, content_data, importance)
             )
+            new_long_id = cursor.lastrowid
             conn.commit()
             conn.close()
         
+        # 新增向量索引更新
+        text_content = content['content'] if isinstance(content, dict) else content
+        vector = self.embedder.encode([text_content])[0]
+    
+        # 根据存储位置更新对应索引
+        if importance >= 3:
+            self._update_index('long', vector, new_long_id)
+        else:
+            self._update_index('short', vector, new_short_id)
+        
+    def _update_index(self, index_type, vector, db_id):
+        """更新指定类型的索引"""
+        vector = vector.reshape(1, -1).astype('float32')
+        index = self.short_term_index if index_type == 'short' else self.long_term_index
+        index.add(vector)
+    
+        # 记录ID映射
+        faiss_id = index.ntotal - 1
+        self.id_mapping[index_type][faiss_id] = db_id
+
+    
+    def search_memories(self, query_text, top_k=5, time_weight=0.3):
+        """混合检索：语义相似度 + 时间衰减"""
+        # 生成查询向量
+        query_vec = self.embedder.encode([query_text])[0].astype('float32')
+    
+        # 并行搜索两个索引
+        short_dist, short_idx = self.short_term_index.search(query_vec.reshape(1, -1), top_k)
+        long_dist, long_idx = self.long_term_index.search(query_vec.reshape(1, -1), top_k)
+    
+        # 合并结果并加载元数据
+        candidates = []
+        for idx in short_idx[0]:
+            if db_id := self.id_mapping['short'].get(idx):
+                record = self._get_memory_by_id('short', db_id)
+                candidates.append(self._calculate_score(record, short_dist[0][idx], time_weight))
+    
+        for idx in long_idx[0]:
+            if db_id := self.id_mapping['long'].get(idx):
+                record = self._get_memory_by_id('long', db_id)
+                candidates.append(self._calculate_score(record, long_dist[0][idx], time_weight))
+    
+        # 按综合得分排序
+        return sorted(candidates, key=lambda x: -x['score'])[:top_k]
+
+    def _get_memory_by_id(self, db_type, db_id):
+        """根据ID获取完整记忆"""
+        conn = sqlite3.connect(getattr(self, f"{db_type}_term_db"))
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM memories WHERE id=?", (db_id,))
+        result = cursor.fetchone()
+        conn.close()
+        return {
+        'id': result[0],
+        'timestamp': result[2],
+        'content': json.loads(result[4]),
+        'importance': result[5]
+        }
+
+    def _calculate_score(self, record, distance, time_weight):
+        """计算综合得分"""
+        hours_passed = (datetime.now() - datetime.fromisoformat(record['timestamp'])).total_seconds() / 3600
+        time_score = 1 / (hours_passed + 1)  # 时间衰减因子
+        return {
+        'content': record['content'],
+        'score': (1 - distance/10) + time_weight*time_score + 0.1*record['importance']
+        }
+    
+    def save_indexes(self):
+        """保存索引到文件"""
+        faiss.write_index(self.short_term_index, f"user_{self.user_id}_short.index")
+        faiss.write_index(self.long_term_index, f"user_{self.user_id}_long.index")
+        with open(f"user_{self.user_id}_mapping.pkl", 'wb') as f:
+            pickle.dump(self.id_mapping, f)
+
+    def load_indexes(self):
+        """加载索引文件"""
+        self.short_term_index = faiss.read_index(f"user_{self.user_id}_short.index")
+        self.long_term_index = faiss.read_index(f"user_{self.user_id}_long.index")
+        with open(f"user_{self.user_id}_mapping.pkl", 'rb') as f:
+            self.id_mapping = pickle.load(f)
     def clear_memories_long(self):
         """清理7天的过期记忆"""
         week_ago = (datetime.now(self.bj_tz) - timedelta(days=7)).isoformat()
