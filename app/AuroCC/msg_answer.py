@@ -164,7 +164,7 @@ class Answer_api:
                         
         finally:
             # 记录主动聊天记录
-            content_json = {"role": "assistant", "content": msg}
+            content_json = {"role": "assistant", "content": str(msg)}
             self.memory.add_memory("active_chat",content=content_json)
             # 发起主动聊天
             #print(f"发起主动聊天: {opener}")
