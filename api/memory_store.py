@@ -131,8 +131,20 @@ class MemoryStore:
         conn.commit()
         conn.close()
     def clear_memories_short(self):
-        pass
+        """
+        删除两天前的重要性小于3的记忆
+        """
+        conn = sqlite3.connect(self.short_term_db)
+        cursor = conn.cursor()
+        cursor.execute("""
+            DELETE FROM memories 
+            WHERE user_id = ? AND importance < 3 AND timestamp < ?
+        """, (self.user_id, (datetime.now(self.bj_tz) - timedelta(days=2)).isoformat()))
+        conn.commit()
+        conn.close()
         
+        
+    
     def get_memories(self, memory_type=None):
         """合并查询两个数据库的记忆"""
         results = []

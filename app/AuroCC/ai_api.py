@@ -156,9 +156,12 @@ class AIApi:
             content_json = {"role": "user", "content": msg}
             self.memory_store.add_memory("user_msg",content=content_json,importance=importance)
     
-    async def Get_check_active_chat(self):
+    async def Get_check_active_chat(self)->list:
         """
-        生成主动聊天的内容
+        生成主动聊天的内容，并进行返回
+
+        Returns:
+            list: 主动聊天的内容
         """
                # 获取最后聊天时间
         last_chat = self.memory_store.get_memories()
@@ -234,29 +237,15 @@ class AIApi:
                         temperature=0.7
                     )
                     opener = topic_response.choices[0].message.content.strip()
+                    return json.loads(opener)
                     
-                    try:
-                        for content_part in json.loads(opener):
-                            #print(f"生成的开场白: {content_part}")
-                            random_delay = random.randint(1, 3)
-                            await asyncio.sleep(random_delay)
-                            await self.msg_send_api(content_part,is_active=True)
-                    except Exception as e:
-                        await self.msg_send_api("消息发送失败(｡･ω･｡)")
-                        self.logger.error(f"消息发送失败: {opener}")
-                        self.logger.error(f"错误信息: {e}")
-                        
-                    finally:
-                        # 记录主动聊天记录
-                        content_json = {"role": "assistant", "content": opener}
-                        self.memory_store.add_memory("active_chat",content=content_json)
-                    # 发起主动聊天
-                    #print(f"发起主动聊天: {opener}")
-                    self.logger.info(f"发起主动聊天: {opener}")
+
                 except Exception as e:
                     self.logger.error(f"话题生成失败: {str(e)}")
                     # 使用默认开场白
-                    await self.msg_answer_api("最近过得怎么样呀？(｡･ω･｡)ﾉ♡", is_active=True)
+                    #await self.msg_answer_api("最近过得怎么样呀？(｡･ω･｡)ﾉ♡", is_active=True)
+                    msg = ["最近过得怎么样呀？(｡･ω･｡)ﾉ♡"]
+                    return msg
         except Exception as e:
             self.logger.error(f"主动聊天判断失败: {str(e)}")
         

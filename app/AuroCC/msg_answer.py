@@ -133,7 +133,7 @@ class Answer_api:
             await self.msg_answer_api()
         elif self.message.get("post_type") == "meta_event" and self.message.get("meta_event_type") == "heartbeat":
             # 检查是否需要主动聊天
-            await AIApi().Get_check_active_chat()
+            await self.active_chat()
 
     def check_message(self,is_active:bool)->bool:
         if is_active:
@@ -144,4 +144,29 @@ class Answer_api:
                     return True
         return False
 
+    async def active_chat(self):
+        msg = AIApi().Get_check_active_chat()
+        if type(msg) != list:
+            msg = ["最近过得怎么样呀？(｡･ω･｡)ﾉ♡"]
+        try:
+            for content_part in msg:
+                #print(f"生成的开场白: {content_part}")
+                random_delay = random.randint(1, 3)
+                await asyncio.sleep(random_delay)
+                await self.msg_send_api(content_part,is_active=True)
+        except Exception as e:
+                await self.msg_send_api("消息发送失败(｡･ω･｡)")
+                self.logger.error(f"消息发送失败: {msg}")
+                self.logger.error(f"错误信息: {e}")
+                        
+        finally:
+            # 记录主动聊天记录
+            content_json = {"role": "assistant", "content": msg}
+            self.memory_store.add_memory("active_chat",content=content_json)
+            # 发起主动聊天
+            #print(f"发起主动聊天: {opener}")
+            self.logger.info(f"发起主动聊天: {msg}")
+        
 
+        
+        
