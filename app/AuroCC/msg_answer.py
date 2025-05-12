@@ -47,7 +47,7 @@ GF_PROMPT = """你是一个可爱的二次元女友，名字叫小清，性格�
 
 class Answer_api:
     def __init__(self, websocket, message:dict):
-        self.Logger = Logger()
+        self.logger = Logger()
         self.message = message
         self.websocket = websocket
         self.user_id = str(message.get('user_id'))
@@ -61,8 +61,8 @@ class Answer_api:
                 self.yml = yaml.safe_load(f)
                 self.memory = MemoryStore(self.yml["basic_settings"]["QQbot_admin_account"])
         except Exception as e:
-            self.Logger.error("配置文件config.yaml加载失败")
-            self.Logger.error(e)
+            self.logger.error("配置文件config.yaml加载失败")
+            self.logger.error(e)
             
             
         
@@ -115,8 +115,8 @@ class Answer_api:
 
         except Exception as e:
             await self.msg_send_api("消息发送失败啦，请稍后再试(｡･ω･｡)")
-            self.Logger.error(f"消息发送失败: {answer}")
-            self.Logger.error(f"错误信息: {e}")
+            self.logger.error(f"消息发送失败: {answer}")
+            self.logger.error(f"错误信息: {e}")
 
     async def msg_send_api(self,answer,is_active=False):
         if self.check_message(is_active):
@@ -146,8 +146,12 @@ class Answer_api:
 
     async def active_chat(self):
         msg = AIApi().Get_check_active_chat()
+        self.logger.debug(f"主动聊天: {msg}")
         if type(msg) != list:
             msg = ["最近过得怎么样呀？(｡･ω･｡)ﾉ♡"]
+        if msg == []:
+            return
+            
         try:
             for content_part in msg:
                 #print(f"生成的开场白: {content_part}")
@@ -162,7 +166,7 @@ class Answer_api:
         finally:
             # 记录主动聊天记录
             content_json = {"role": "assistant", "content": msg}
-            self.memory_store.add_memory("active_chat",content=content_json)
+            self.memory.add_memory("active_chat",content=content_json)
             # 发起主动聊天
             #print(f"发起主动聊天: {opener}")
             self.logger.info(f"发起主动聊天: {msg}")

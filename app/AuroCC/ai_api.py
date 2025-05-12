@@ -156,7 +156,7 @@ class AIApi:
             content_json = {"role": "user", "content": msg}
             self.memory_store.add_memory("user_msg",content=content_json,importance=importance)
     
-    async def Get_check_active_chat(self)->list:
+    def Get_check_active_chat(self)->list:
         """
         生成主动聊天的内容，并进行返回
 
@@ -166,18 +166,18 @@ class AIApi:
                # 获取最后聊天时间
         last_chat = self.memory_store.get_memories()
         if not last_chat:
-            return False
+            return []
         timestamp = str(self.memory_store.get_memory_short_time())
 
         if not timestamp:
-            return False
+            return []
             
         last_time = datetime.fromisoformat(timestamp)
         if last_time.tzinfo is None:
             last_time = last_time.replace(tzinfo=pytz.utc)  # 假设timestamp是UTC时间
         
         if (datetime.now(self.bj_tz) - last_time.astimezone(self.bj_tz)).total_seconds() < random.randint(5*60, 5*60*60):  # 30分钟内聊过
-            return False
+            return []
             
         # 准备主动聊天判断数据
         context = {
@@ -246,6 +246,8 @@ class AIApi:
                     #await self.msg_answer_api("最近过得怎么样呀？(｡･ω･｡)ﾉ♡", is_active=True)
                     msg = ["最近过得怎么样呀？(｡･ω･｡)ﾉ♡"]
                     return msg
+            
+            return []
         except Exception as e:
             self.logger.error(f"主动聊天判断失败: {str(e)}")
         
