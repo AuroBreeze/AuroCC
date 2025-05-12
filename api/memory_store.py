@@ -21,8 +21,8 @@ class MemoryStore:
         # 新增向量索引相关属性
         
         # 改用支持中文更好的模型
-        self.embedder = SentenceTransformer('distiluse-base-multilingual-cased-v2')
-        self.dim = 384  # 与模型维度一致
+        self.embedder = SentenceTransformer("./local_model")
+        self.dim = self.embedder.get_sentence_embedding_dimension()  # 与模型维度一致
         self.short_term_index = faiss.IndexFlatL2(self.dim)
         self.long_term_index = faiss.IndexFlatL2(self.dim)
         self.id_mapping = {'short': {}, 'long': {}}  # FAISS ID -> 数据库ID
@@ -166,7 +166,7 @@ class MemoryStore:
 
     def _calculate_score(self, record, distance, time_weight):
         """计算综合得分"""
-        hours_passed = (datetime.now() - datetime.fromisoformat(record['timestamp'])).total_seconds() / 3600
+        hours_passed = (datetime.now(self.bj_tz) - datetime.fromisoformat(record['timestamp'])).total_seconds() / 3600
         time_score = 1 / (hours_passed + 1)  # 时间衰减因子
         return {
         'content': record['content'],

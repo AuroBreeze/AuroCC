@@ -72,13 +72,22 @@
 # print(msg[-2:])
 # print(mes[-5:])
 
-# python -c "from sentence_transformers import SentenceTransformer; model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2'); model.save('local_model')"
+# python -c "from sentence_transformers import SentenceTransformer; model = SentenceTransformer('distiluse-base-multilingual-cased-v2'); model.save('local_model')"
 from api.memory_store import MemoryStore
 
 memory = MemoryStore("1732373074")
+
+# 添加测试记忆
+test_memory = {
+    "role": "system", 
+    "content": "Debug模式已开启，当前版本号v1.2.3"
+}
+memory.add_memory("system", test_memory, importance=3)
+
 res = memory.search_memories("debug",top_k=3,time_weight=0.4)
 
 for i in res:
+    print(i)
     print(f"[相关度:{i['score']:.2f}] {i['content']['content']}")
 
 
