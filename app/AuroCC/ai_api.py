@@ -215,6 +215,8 @@ class AIApi:
             #print(f"主动聊天判断结果: {should_chat}")
             self.logger.info(f"主动聊天判断结果: {should_chat}")
             if should_chat:
+                
+                self.logger.info(f"话题基于记忆{msg[-5:]}")
                 # 生成个性化开场白
                 topic_prompt = f"""基于以下记忆生成一个自然的聊天开场白：
                 注意：

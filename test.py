@@ -56,7 +56,18 @@
 # now = datetime.now(bj_tz)
 # print(now.strftime('%Y-%m-%d %H:%M:%S %Z%z'))
 
-import json
-import ast
-i = str(['(⊙ˍ⊙) 诶？', '这是新型密码吗', '还是在测试', '我的反应呀~', '不管怎样', '收到指令！', '✧٩(ˊωˋ*)و✧'])
-print(ast.literal_eval(i)[4])
+# import json
+# import ast
+# i = str(['(⊙ˍ⊙) 诶？', '这是新型密码吗', '还是在测试', '我的反应呀~', '不管怎样', '收到指令！', '✧٩(ˊωˋ*)و✧'])
+# print(ast.literal_eval(i)[4])
+
+from api.memory_store import MemoryStore
+
+memory = MemoryStore("1732373074")
+res = memory.get_memories()
+msg = [1,2,3,4,5,6,8]
+mes = []
+for i in reversed(res):
+    mes.append(i)
+print(msg[-2:])
+print(mes[-5:])
