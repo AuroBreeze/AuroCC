@@ -228,7 +228,7 @@ class AIApi:
                 
                 最后聊天时间：{last_time}
                 当前时间：{datetime.now(self.bj_tz)}
-                最近聊天记录：{json.dumps(context['memories'], ensure_ascii=False)}
+                最近聊天记录：{msg[-30:]}
                 
                 要求：
                 1. 使用可爱的语气和颜文字
@@ -241,7 +241,7 @@ class AIApi:
                     topic_response = client.chat.completions.create(
                         model="deepseek-chat",
                         messages=[{"role":"system","content":GF_PROMPT},{"role": "user", "content": topic_prompt}],
-                        temperature=0.7
+                        temperature=1
                     )
                     opener = topic_response.choices[0].message.content.strip()
                     return ast.literal_eval(opener)
