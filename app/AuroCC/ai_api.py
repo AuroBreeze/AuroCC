@@ -66,37 +66,61 @@ class AIApi:
             list: _description_
         """
                 # 获取最近对话上下文 (确保获取有效数据)
-        try:
-            memories = self.memory_store.get_memories()
-            #print("获取最近对话上下文...")
-            #print(memories)
-            if not memories:
-                # 数据库为空时初始化第一条记录
-                self.memory_store.add_memory("system_msg", {
-                    "content": "系统初始化",
-                    "importance": 0
-                })
-                memories = self.memory_store.get_memories()
-                if not memories:
-                    self.logger.error("无法初始化记忆数据")
-                    return
-        except Exception as e:
-            self.logger.error("无法获取记忆数据")
-            self.logger.error("错误信息: " + str(e))
-            
+        # try:
+        #     memories = self.memory_store.get_memories()
+        #     #print("获取最近对话上下文...")
+        #     #print(memories)
+        #     if not memories:
+        #         # 数据库为空时初始化第一条记录
+        #         self.memory_store.add_memory("system_msg", {
+        #             "content": "系统初始化",
+        #             "importance": 0
+        #         })
+        #         memories = self.memory_store.get_memories()
+        #         if not memories:
+        #             self.logger.error("无法初始化记忆数据")
+        #             return
+        # except Exception as e:
+        #     self.logger.error("无法获取记忆数据")
+        #     self.logger.error("错误信息: " + str(e))
         
-        prompt = {"role":"system","content":GF_PROMPT}
-        meaasge = [prompt]
-        for memory in reversed(memories):
-            meaasge.append(memory)
+        try:
+            self.memory_store.load_indexes()
+            self.logger.info("加载索引成功")
+            try:
+                qurey_text = str(self.memory_store.get_memory_short())
+                if not qurey_text:
+                                    # 数据库为空时初始化第一条记录
+                    self.memory_store.add_memory("system_msg", {
+                        "content": "系统初始化",
+                        "importance": 0
+                    })
+                    qurey_text = str(self.memory_store.get_memory_short())
+                self.logger.info(f"获取最近对话内容: {qurey_text}")
+            except:
+                qurey_text = ""
+                self.logger.error("获取最近对话内容失败")
+        except Exception as e:
+            self.logger.error("无法加载索引")
+            self.logger.error("错误信息: " + str(e))
+        
             
+        memories = self.memory_store.search_memories(query_text=qurey_text,top_k=30)
+        self.logger.info(f"搜索记忆结果: {memories}")
+
+        prompt = {"role":"system","content":GF_PROMPT}
+        message = [prompt]
+        for memory in reversed(memories):
+            message.append(memory["content"])
+        message.append(ast.literal_eval(qurey_text))
+        print(message)
         self.logger.info("获取到记忆")
         #print(meaasge)
             
         response = self.client.chat.completions.create(
                 model="deepseek-chat",
                 temperature=0.7,
-                messages=meaasge,
+                messages=message,
                 max_tokens=256,
             )
         answer = response.choices[0].message.content.strip()
