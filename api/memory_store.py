@@ -96,22 +96,6 @@ class MemoryStore:
         text_content = content['content'] if isinstance(content, dict) else content
         vector = self.embedder.encode([text_content])[0]
     
-        # # 根据重要性决定存储位置
-        # if importance >= 3:
-        #     # 添加到长期记忆库
-        #     conn = sqlite3.connect(self.long_term_db)
-        #     cursor = conn.cursor()
-        #     cursor.execute(
-        #         "INSERT INTO memories (user_id, timestamp, memory_type, content, importance) VALUES (?, ?, ?, ?, ?)",
-        #         (self.user_id, now, memory_type, content_data, importance)
-        #     )
-        #     new_long_id = cursor.lastrowid
-        #     conn.commit()
-        #     conn.close()
-            
-        #     # 更新长期索引
-        #     self._update_index('long', vector, new_long_id)
-        
         # 总是更新短期索引
         self._update_index('short', vector, new_short_id)
         
