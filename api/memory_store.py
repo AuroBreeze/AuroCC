@@ -74,9 +74,7 @@ class MemoryStore:
             content_data = json.dumps(content, ensure_ascii=False)
         else:
             content_data = json.dumps({"role":"assistant","content": str(content)}, ensure_ascii=False)
-        #print(f"[MemoryStore] 添加记忆: {type(content_data)} {content_data}")
         self.logger.info(f"添加记忆: {type(content_data)} {content_data}")
-        
         
         # 添加到短期记忆库(确保importance为整数)
         conn = sqlite3.connect(self.short_term_db)
@@ -94,27 +92,28 @@ class MemoryStore:
         finally:
             conn.close()
         
-        # 重要记忆(importance>=3)直接添加到长期记忆库
-        if importance >= 3:
-            conn = sqlite3.connect(self.long_term_db)
-            cursor = conn.cursor()
-            cursor.execute(
-                "INSERT INTO memories (user_id, timestamp, memory_type, content, importance) VALUES (?, ?, ?, ?, ?)",
-                (self.user_id, now, memory_type, content_data, importance)
-            )
-            new_long_id = cursor.lastrowid
-            conn.commit()
-            conn.close()
-        
         # 新增向量索引更新
         text_content = content['content'] if isinstance(content, dict) else content
         vector = self.embedder.encode([text_content])[0]
     
-        # 根据存储位置更新对应索引
-        if importance >= 3:
-            self._update_index('long', vector, new_long_id)
-        else:
-            self._update_index('short', vector, new_short_id)
+        # # 根据重要性决定存储位置
+        # if importance >= 3:
+        #     # 添加到长期记忆库
+        #     conn = sqlite3.connect(self.long_term_db)
+        #     cursor = conn.cursor()
+        #     cursor.execute(
+        #         "INSERT INTO memories (user_id, timestamp, memory_type, content, importance) VALUES (?, ?, ?, ?, ?)",
+        #         (self.user_id, now, memory_type, content_data, importance)
+        #     )
+        #     new_long_id = cursor.lastrowid
+        #     conn.commit()
+        #     conn.close()
+            
+        #     # 更新长期索引
+        #     self._update_index('long', vector, new_long_id)
+        
+        # 总是更新短期索引
+        self._update_index('short', vector, new_short_id)
         
     def _update_index(self, index_type, vector, db_id):
         """更新指定类型的索引"""
@@ -186,7 +185,7 @@ class MemoryStore:
         semantic_score = 1.0 / (1.0 + distance)  # 使用更合理的距离转换
         return {
             'content': record['content'],
-            'score': (0.7 * semantic_score) + (0.2 * time_weight*time_score) + (0.1 * record['importance']/5.0)
+            'score': (0.6 * semantic_score) + (0.1 * time_weight*time_score) + (0.3 * record['importance']/5.0)
         }
     
     def save_indexes(self):
@@ -223,60 +222,45 @@ class MemoryStore:
         长期索引数量: {self.long_term_index.ntotal}
         最后检索耗时: {self.last_search_time:.2f}ms
         """)
-    def clear_memories_long(self):
-        """清理7天的过期记忆"""
-        week_ago = (datetime.now(self.bj_tz) - timedelta(days=7)).isoformat()
+    def clear_memories_short(self):
+        """
+        清理两天前的记忆：
+        1. 将重要性>=3的记忆转移到长期数据库
+        2. 删除两天前的所有记忆
+        """
+        two_days_ago = (datetime.now(self.bj_tz) - timedelta(days=2)).isoformat()
         
-        # 从短期库获取所有7天前的记忆
+        # 1. 先查询两天前重要性>=3的记忆
         conn = sqlite3.connect(self.short_term_db)
         cursor = conn.cursor()
         cursor.execute("""
             SELECT timestamp, memory_type, content, importance 
             FROM memories 
-            WHERE user_id = ? AND timestamp <= ?
-        """, (self.user_id, week_ago))
+            WHERE user_id = ? AND importance >= 3 AND timestamp < ?
+        """, (self.user_id, two_days_ago))
         
-        # 添加到长期库
+        # 2. 将这些重要记忆转移到长期数据库
         long_conn = sqlite3.connect(self.long_term_db)
         long_cursor = long_conn.cursor()
-        # 更新长期库中重要性<=3的记忆
-        long_cursor.execute("""
-            UPDATE memories 
-            SET importance = importance - 1 
-            WHERE user_id = ? AND importance <= 3
-        """, (self.user_id,))
-        
-        # 删除长期库中重要性为0的记忆
-        long_cursor.execute("""
-            DELETE FROM memories 
-            WHERE user_id = ? AND importance <= 0
-        """, (self.user_id,))
-        
+        for row in cursor.fetchall():
+            long_cursor.execute(
+                "INSERT INTO memories (user_id, timestamp, memory_type, content, importance) VALUES (?, ?, ?, ?, ?)",
+                (self.user_id, row[0], row[1], row[2], row[3])
+            )
         long_conn.commit()
         long_conn.close()
         
-        # 清理短期库中所有超过7天的记忆（不管重要性）
+        # 3. 删除短期数据库中两天前的所有记忆
         cursor.execute("""
             DELETE FROM memories 
-            WHERE user_id = ? AND timestamp <= ?
-        """, (self.user_id, week_ago))
-        
-        conn.commit()
-        conn.close()
-    def clear_memories_short(self):
-        """
-        删除两天前的重要性小于3的记忆
-        """
-        conn = sqlite3.connect(self.short_term_db)
-        cursor = conn.cursor()
-        cursor.execute("""
-            DELETE FROM memories 
-            WHERE user_id = ? AND importance < 3 AND timestamp < ?
-        """, (self.user_id, (datetime.now(self.bj_tz) - timedelta(days=2)).isoformat()))
+            WHERE user_id = ? AND timestamp < ?
+        """, (self.user_id, two_days_ago))
         conn.commit()
         conn.close()
         
+        # 4. 重建索引
         self._rebuild_index('short')
+        self._rebuild_index('long')
     
     def _rebuild_index(self, index_type):
         """全量重建指定索引（short 或 long）"""
@@ -309,23 +293,12 @@ class MemoryStore:
             index.add(np.array(vectors).astype('float32'))
             self.id_mapping[index_type] = id_map
             self.logger.info(f"{index_type} 索引重建成功，共添加向量 {len(vectors)} 条。")
-    # def _rebuild_index(self, index_type):
-    #     """全量重建指定索引"""
-    #     conn = sqlite3.connect(getattr(self, f"{index_type}_term_db"))
-    #     cursor = conn.cursor()
-    #     cursor.execute("SELECT id, content FROM memories")
-    #     vectors = [self.embedder.encode(json.loads(row[1])['content']) for row in cursor]
-    #     getattr(self, f"{index_type}_term_index").reset()
-    #     getattr(self, f"{index_type}_term_index").add(np.array(vectors).astype('float32'))
-    #     self.id_mapping[index_type] = {i: row[0] for i, row in enumerate(cursor)}
-    #     conn.close()
-    
+
     def rebuild_all_indexes(self):
         """全量重建所有索引"""
         self._rebuild_index('short')
         self._rebuild_index('long')
         
-    
     
     def get_memories(self, memory_type=None):
         """合并查询两个数据库的记忆"""
