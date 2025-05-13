@@ -56,9 +56,11 @@ class AIApi:
         self.memory_store = MemoryStore(self.QQbot_admin_account)
         self.bj_tz = pytz.timezone('Asia/Shanghai')
     
-    def Get_aurocc_response(self) -> list:
+    def Get_aurocc_response(self,importance:int) -> list:
         """
-        获取AuroCC的回复
+        获取AuroCC的回复,并对消息进行数据库的存储
+        Args:
+            importance (int): 重要性
 
         Returns:
             list: _description_
@@ -109,10 +111,10 @@ class AIApi:
             self.logger.error(f"错误信息: {e}")
         finally:
             answer_json = {"role": "assistant", "content": str(answer)}
-            self.memory_store.add_memory("ai_msg",content=answer_json)
+            self.memory_store.add_memory("ai_msg",content=answer_json,importance=importance)
         return answer
 
-    def Get_message_importance_and_add_to_memory(self,msg:str):
+    def Get_message_importance_and_add_to_memory(self,msg:str)->int:
         """
         获取消息的importance
 
@@ -156,6 +158,8 @@ class AIApi:
             msg = msg+"当前时间为："+str(datetime.now(self.bj_tz))
             content_json = {"role": "user", "content": msg}
             self.memory_store.add_memory("user_msg",content=content_json,importance=importance)
+        
+        return int(importance)
     
     def Get_check_active_chat(self)->list:
         """

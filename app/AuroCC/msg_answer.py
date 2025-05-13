@@ -97,8 +97,8 @@ class Answer_api:
         del self.message_buffer[self.user_id]
         #print(f"合并消息: {msg}")
         
-        AIApi().Get_message_importance_and_add_to_memory(msg) # 记录消息重要性并将消息存入sql中
-        answer = AIApi().Get_aurocc_response() # 获取AI的回答
+        importance = AIApi().Get_message_importance_and_add_to_memory(msg) # 记录消息重要性并将消息存入sql中
+        answer = AIApi().Get_aurocc_response(importance=importance) # 获取AI的回答
         
         try:
             if type(answer) is list:
