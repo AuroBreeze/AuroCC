@@ -1,0 +1,74 @@
+from api.memory_store import MemoryStore
+import sqlite3
+import json
+import numpy as np
+
+memory = MemoryStore("1732373074")
+# memory.rebuild_all_indexes()
+class DataMigrator:
+    def __init__(self, memory_store):
+        self.store = memory_store
+        
+    def migrate_existing_data(self, batch_size=500):
+        """迁移短期记忆库中的已有数据"""
+        conn = sqlite3.connect(self.store.short_term_db)
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, content FROM memories")
+        
+        vectors = []
+        db_ids = []
+        for row in cursor:
+            # 解析内容
+            content = json.loads(row[1])['content']
+            # 生成向量
+            vector = self.store.embedder.encode(content)
+            vectors.append(vector)
+            db_ids.append(row[0])
+            
+            # 批量处理
+            if len(vectors) >= batch_size:
+                self._batch_add('short', vectors, db_ids)
+                vectors.clear()
+                db_ids.clear()
+        
+        # 处理剩余数据
+        if vectors:
+            self._batch_add('short', vectors, db_ids)
+            
+    def _batch_add(self, index_type, vectors, db_ids):
+        """批量添加索引"""
+        vectors = np.array(vectors).astype('float32')
+        index = getattr(self.store, f"{index_type}_term_index")
+        index.add(vectors)
+        
+        # 更新ID映射
+        start_id = index.ntotal - len(db_ids)
+        self.store.id_mapping[index_type].update({
+            start_id + i: db_id 
+            for i, db_id in enumerate(db_ids)
+        })
+
+memory = MemoryStore("1732373074")
+migrator = DataMigrator(memory)
+
+# 迁移现有数据（首次部署时运行）
+migrator.migrate_existing_data()
+
+# 验证索引数量
+print(f"短期索引条目数: {memory.short_term_index.ntotal}")
+
+# # 添加测试记忆
+# test_memory = {
+#     "role": "system", 
+#     "content": "Debug模式已开启，当前版本号v1.2.3"
+# }
+# memory.add_memory("system", test_memory, importance=3)
+
+#memory.load_indexes()
+#memory.rebuild_all_indexes()  # 重建索引确保使用新的评分算法
+#print("索引重建完成，开始测试搜索...")
+res = memory.search_memories("bug", top_k=5, time_weight=0.4)  # 减少top_k以便观察结果
+
+for i in res:
+    #print(i)
+    print(f"[相关度:{i['score']:.2f}] {i['content']['content']}")
