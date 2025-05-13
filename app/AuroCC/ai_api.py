@@ -181,7 +181,7 @@ class AIApi:
         if last_time.tzinfo is None:
             last_time = last_time.replace(tzinfo=pytz.utc)  # 假设timestamp是UTC时间
         
-        if (datetime.now(self.bj_tz) - last_time.astimezone(self.bj_tz)).total_seconds() < random.randint(5*60, 5*60*60):  # 30分钟内聊过
+        if (datetime.now(self.bj_tz) - last_time.astimezone(self.bj_tz)).total_seconds() < random.randint(5*60, 7*60*60):  # 30分钟内聊过
             return []
             
         # 准备主动聊天判断数据
