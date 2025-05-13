@@ -120,6 +120,8 @@ class MemoryStore:
         """更新指定类型的索引"""
         vector = vector.reshape(1, -1).astype('float32')
         index = self.short_term_index if index_type == 'short' else self.long_term_index
+        if index.d != self.dim and index.ntotal > 0:
+            raise ValueError(f"向量维度 {self.dim} 与索引维度 {index.d} 不匹配")
         index.add(vector)
     
         # 记录ID映射
@@ -131,22 +133,27 @@ class MemoryStore:
         """混合检索：语义相似度 + 时间衰减"""
         # 生成查询向量
         query_vec = self.embedder.encode([query_text])[0].astype('float32')
+        
+         # 动态调整搜索范围
+        max_short = min(top_k, self.short_term_index.ntotal) 
+        max_long = min(top_k, self.long_term_index.ntotal)
+
     
         # 并行搜索两个索引
-        short_dist, short_idx = self.short_term_index.search(query_vec.reshape(1, -1), top_k)
-        long_dist, long_idx = self.long_term_index.search(query_vec.reshape(1, -1), top_k)
+        short_dist, short_idx = self.short_term_index.search(query_vec.reshape(1, -1), max_short or 1)
+        long_dist, long_idx = self.long_term_index.search(query_vec.reshape(1, -1), max_long or 1)
     
         # 合并结果并加载元数据
         candidates = []
-        for idx in short_idx[0]:
+        for i, idx in enumerate(short_idx[0]):
             if db_id := self.id_mapping['short'].get(idx):
                 record = self._get_memory_by_id('short', db_id)
-                candidates.append(self._calculate_score(record, short_dist[0][idx], time_weight))
+                candidates.append(self._calculate_score(record, short_dist[0][i], time_weight))
     
-        for idx in long_idx[0]:
+        for i, idx in enumerate(long_idx[0]):
             if db_id := self.id_mapping['long'].get(idx):
                 record = self._get_memory_by_id('long', db_id)
-                candidates.append(self._calculate_score(record, long_dist[0][idx], time_weight))
+                candidates.append(self._calculate_score(record, long_dist[0][i], time_weight))
     
         # 按综合得分排序
         return sorted(candidates, key=lambda x: -x['score'])[:top_k]
@@ -167,11 +174,19 @@ class MemoryStore:
 
     def _calculate_score(self, record, distance, time_weight):
         """计算综合得分"""
-        hours_passed = (datetime.now(self.bj_tz) - datetime.fromisoformat(record['timestamp'])).total_seconds() / 3600
+
+        dt = datetime.fromisoformat(record['timestamp'])
+        if not dt.tzinfo:
+            dt = self.bj_tz.localize(dt)
+        else:
+            dt = dt.astimezone(self.bj_tz)
+        hours_passed = (datetime.now(self.bj_tz) - dt).total_seconds() / 3600
         time_score = 1 / (hours_passed + 1)  # 时间衰减因子
+        # 调整得分计算，增加语义相似度权重
+        semantic_score = 1.0 / (1.0 + distance)  # 使用更合理的距离转换
         return {
-        'content': record['content'],
-        'score': (1 - distance/10) + time_weight*time_score + 0.1*record['importance']
+            'content': record['content'],
+            'score': (0.7 * semantic_score) + (0.2 * time_weight*time_score) + (0.1 * record['importance']/5.0)
         }
     
     def save_indexes(self):
@@ -264,15 +279,46 @@ class MemoryStore:
         self._rebuild_index('short')
     
     def _rebuild_index(self, index_type):
-        """全量重建指定索引"""
-        conn = sqlite3.connect(getattr(self, f"{index_type}_term_db"))
+        """全量重建指定索引（short 或 long）"""
+        db_path = getattr(self, f"{index_type}_term_db")
+        conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
-        cursor.execute("SELECT id, content FROM memories")
-        vectors = [self.embedder.encode(json.loads(row[1])['content']) for row in cursor]
-        getattr(self, f"{index_type}_term_index").reset()
-        getattr(self, f"{index_type}_term_index").add(np.array(vectors).astype('float32'))
-        self.id_mapping[index_type] = {i: row[0] for i, row in enumerate(cursor)}
+        cursor.execute("SELECT id, content FROM memories WHERE user_id = ?", (self.user_id,))
+        rows = cursor.fetchall()
         conn.close()
+
+        if not rows:
+            self.logger.info(f"{index_type} 索引重建：没有找到任何记忆。")
+            return
+
+        vectors = []
+        id_map = {}
+        for i, (db_id, content_json) in enumerate(rows):
+            try:
+                content_dict = json.loads(content_json)
+                text = content_dict.get('content', '')
+                vector = self.embedder.encode([text])[0]
+                vectors.append(vector)
+                id_map[i] = db_id
+            except Exception as e:
+                self.logger.error(f"重建索引时解析出错: {e}")
+
+        index = self.short_term_index if index_type == 'short' else self.long_term_index
+        index.reset()
+        if vectors:
+            index.add(np.array(vectors).astype('float32'))
+            self.id_mapping[index_type] = id_map
+            self.logger.info(f"{index_type} 索引重建成功，共添加向量 {len(vectors)} 条。")
+    # def _rebuild_index(self, index_type):
+    #     """全量重建指定索引"""
+    #     conn = sqlite3.connect(getattr(self, f"{index_type}_term_db"))
+    #     cursor = conn.cursor()
+    #     cursor.execute("SELECT id, content FROM memories")
+    #     vectors = [self.embedder.encode(json.loads(row[1])['content']) for row in cursor]
+    #     getattr(self, f"{index_type}_term_index").reset()
+    #     getattr(self, f"{index_type}_term_index").add(np.array(vectors).astype('float32'))
+    #     self.id_mapping[index_type] = {i: row[0] for i, row in enumerate(cursor)}
+    #     conn.close()
     
     def rebuild_all_indexes(self):
         """全量重建所有索引"""
@@ -362,5 +408,3 @@ class MemoryStore:
         if not result:
             return None
         return json.loads(result[0])
-        
-    
