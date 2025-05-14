@@ -4,11 +4,9 @@ from api.memory_store import MemoryStore
 from api.Logger_owner import Logger
 from app.AuroCC.share_date import judge_message_short_task
 
-import asyncio
-
 class MsgProcess:
     def __init__(self, user_id):
-        self.bj_tz = pytz.timezone('Asia/Beijing')
+        self.bj_tz = pytz.timezone('Asia/Shanghai')
         self.memory_store = MemoryStore(user_id)
         self.logger = Logger()
         pass
