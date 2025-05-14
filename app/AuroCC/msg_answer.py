@@ -70,6 +70,8 @@ class Answer_api:
         
         importance = AIApi().Get_message_importance_and_add_to_memory(msg) # 记录消息重要性并将消息存入sql中
         answer = AIApi().Get_aurocc_response(importance=importance) # 获取AI的回答
+
+        self.memory.save_indexes() # 保存faiss索引
         
         try:
             if type(answer) is list:
@@ -100,8 +102,10 @@ class Answer_api:
             await self.msg_answer_api()
         elif self.message.get("post_type") == "meta_event" and self.message.get("meta_event_type") == "heartbeat":
             # 检查是否需要主动聊天
-            await self.active_chat()
-            asyncio.create_task(MsgProcessScheduler(self.user_id).start_scheduler())
+            #await self.active_chat()
+            asyncio.create_task(self.active_chat())
+            asyncio.create_task(MsgProcessScheduler(self.user_id).Start_scheduler())
+            asyncio.create_task(MsgProcessScheduler(self.user_id).Save_and_rebuild_indexs())
 
     def check_message(self,is_active:bool)->bool:
         if is_active:

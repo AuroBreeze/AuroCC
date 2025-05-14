@@ -15,5 +15,7 @@ RUN pip install .
 
 EXPOSE 3001
 
+RUN python utils/DataMigrator.py
 
-CMD ["sh","-c","python utils/DataMigrator.py && python main.py"]
+
+CMD ["python","main.py"]

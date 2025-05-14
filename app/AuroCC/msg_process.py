@@ -16,8 +16,13 @@ class MsgProcess:
     def Extract_msg_center(self):
         # Extract msg center from memory store
         pass
+
+    def Save_indexs_and_rebuild_indexs(self):
+        self.memory_store.save_indexes()
+        self.memory_store.rebuild_all_indexes()
+        self.logger.info("保存索引成功")
     
-    def clear_memories_short(self):
+    def Clear_memories_short(self):
         self.memory_store.clear_memories_short()
         self.logger.info("清理短期数据库成功")
 
@@ -26,15 +31,21 @@ class MsgProcessScheduler:
         self.msg_process = MsgProcess(user_id)
         self.bj_tz = pytz.timezone('Asia/Beijing')
         
-    async def start_scheduler(self):
+    async def Start_scheduler(self):
         now = datetime.now(self.bj_tz)
         
         if (now.hour >= 10 and now.hour<=11) or (now.hour >= 22 and now.hour<= 23):
             if judge_message_short_task == False:
-                self.msg_process.clear_memories_short()
+                self.msg_process.Clear_memories_short()
                 judge_message_short_task = True # 设置为True,完成任务
         else:
             judge_message_short_task = False # 重置为False,等待下一次任务
+    
+    async def Save_and_rebuild_indexs(self):
+        now = datetime.now(self.bj_tz)
+        
+        if now.hour == 10 and now.minute == 30:
+            self.msg_process.Save_indexs_and_rebuild_indexs()
             
         
             

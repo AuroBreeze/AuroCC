@@ -3,8 +3,6 @@ import sqlite3
 import json
 import numpy as np
 
-# memory = MemoryStore("1732373074")
-# memory.rebuild_all_indexes()
 class DataMigrator:
     def __init__(self, memory_store):
         self.store = memory_store
@@ -48,27 +46,24 @@ class DataMigrator:
             for i, db_id in enumerate(db_ids)
         })
 
-memory = MemoryStore("1732373074")
-migrator = DataMigrator(memory)
+if __name__ == "__main__":
+    memory = MemoryStore("1732373074")
+    migrator = DataMigrator(memory)
 
-# 迁移现有数据（首次部署时运行）
-migrator.migrate_existing_data()
+    # 迁移现有数据（首次部署时运行）
+    migrator.migrate_existing_data()
+    
+    memory.save_indexes()  # 保存索引
 
-# 验证索引数量
-print(f"短期索引条目数: {memory.short_term_index.ntotal}")
+    # 验证索引数量
+    print(f"短期索引条目数: {memory.short_term_index.ntotal}")
 
-# # 添加测试记忆
-# test_memory = {
-#     "role": "system", 
-#     "content": "Debug模式已开启，当前版本号v1.2.3"
-# }
-# memory.add_memory("system", test_memory, importance=3)
+    memory.load_indexes()
+    memory.rebuild_all_indexes()  # 重建索引确保使用新的评分算法
+    print("索引重建完成，开始测试搜索...")
+    res = memory.search_memories("我想要打会游戏", top_k=5, time_weight=0.3)  # 减少top_k以便观察结果
 
-memory.load_indexes()
-memory.rebuild_all_indexes()  # 重建索引确保使用新的评分算法
-print("索引重建完成，开始测试搜索...")
-res = memory.search_memories("我想要打会游戏", top_k=5, time_weight=0.3)  # 减少top_k以便观察结果
-
-for i in res:
-    #print(i)
-    print(f"[相关度:{i['score']:.2f}] {i['content']['content']}")
+    for i in res:
+        #print(i)
+        print(f"[相关度:{i['score']:.2f}] {i['content']['content']}")
+        
