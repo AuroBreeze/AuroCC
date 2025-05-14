@@ -10,4 +10,4 @@ COPY . .
 
 EXPOSE 3001
 
-CMD ["python", "main.py"]
+CMD ["sh","-c""python utils/DataMigrator.py && python main.py"]
