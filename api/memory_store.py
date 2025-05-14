@@ -10,6 +10,8 @@ from sentence_transformers import SentenceTransformer
 import pickle  # 新增导入
 
 class MemoryStore:
+
+    _model = None  # 新增模型属性
     def __init__(self, user_id):
         self.user_id = str(user_id)
         self.short_term_db = Path(f"user_memories_short_{user_id}.db")
@@ -21,7 +23,9 @@ class MemoryStore:
         # 新增向量索引相关属性
         
         # 改用支持中文更好的模型
-        self.embedder = SentenceTransformer("./local_model") # 加载本地模型
+        if not MemoryStore._model: # 减少重复加载模型
+            self.embedder = SentenceTransformer("./local_model") # 加载本地模型
+        self.embedder = MemoryStore._model  # 新增模型属性
         # self.embedder = SentenceTransformer("distilbert-base-nli-stsb-mean-tokens") # 加载中文模型
         self.dim = self.embedder.get_sentence_embedding_dimension()  # 与模型维度一致
         self.short_term_index = faiss.IndexFlatL2(self.dim)
