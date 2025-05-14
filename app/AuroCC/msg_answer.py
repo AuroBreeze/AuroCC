@@ -10,6 +10,7 @@ import random
 import asyncio
 from app.AuroCC.share_date import message_buffer
 from app.AuroCC.ai_api import AIApi
+from app.AuroCC.msg_process import MsgProcessScheduler
 import pytz
 
 class Answer_api:
@@ -20,7 +21,6 @@ class Answer_api:
         self.user_id = str(message.get('user_id'))
         
         self.bj_tz = pytz.timezone('Asia/Shanghai')
-        
         self.message_buffer = message_buffer  # 用户ID: {"parts": [], "last_time": timestamp}
         
         try:
@@ -101,6 +101,7 @@ class Answer_api:
         elif self.message.get("post_type") == "meta_event" and self.message.get("meta_event_type") == "heartbeat":
             # 检查是否需要主动聊天
             await self.active_chat()
+            asyncio.create_task(MsgProcessScheduler(self.user_id).start_scheduler())
 
     def check_message(self,is_active:bool)->bool:
         if is_active:
