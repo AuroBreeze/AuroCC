@@ -16,8 +16,8 @@ class MsgProcess:
         pass
 
     def Save_indexs_and_rebuild_indexs(self):
-        self.memory_store.save_indexes()
         self.memory_store.rebuild_all_indexes()
+        self.memory_store.save_indexes()
         self.logger.info("保存索引成功")
     
     def Clear_memories_short(self):
