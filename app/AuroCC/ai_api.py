@@ -56,45 +56,63 @@ class AIApi:
         self.memory_store = MemoryStore(self.QQbot_admin_account)
         self.bj_tz = pytz.timezone('Asia/Shanghai')
     
-    def Get_aurocc_response(self) -> list:
+    def Get_aurocc_response(self,importance:int) -> list:
         """
-        获取AuroCC的回复
+        获取AuroCC的回复,并对消息进行数据库的存储
+        Args:
+            importance (int): 重要性
 
         Returns:
             list: _description_
         """
-                # 获取最近对话上下文 (确保获取有效数据)
         try:
-            memories = self.memory_store.get_memories()
-            #print("获取最近对话上下文...")
-            #print(memories)
-            if not memories:
-                # 数据库为空时初始化第一条记录
-                self.memory_store.add_memory("system_msg", {
-                    "content": "系统初始化",
-                    "importance": 0
-                })
-                memories = self.memory_store.get_memories()
-                if not memories:
-                    self.logger.error("无法初始化记忆数据")
-                    return
+            self.memory_store.load_indexes() # 加载索引
+            self.logger.info("加载索引成功")
+            try:
+                qurey_text = str(self.memory_store.get_memory_short()) # 获取刚刚发送的对话内容
+                if not qurey_text:  # 数据库为空时初始化第一条记录
+                    self.memory_store.add_memory("system_msg", {
+                        "content": "系统初始化",
+                        "importance": 0
+                    })
+                    qurey_text = str(self.memory_store.get_memory_short())
+                self.logger.info(f"获取最近对话内容: {qurey_text}")
+            except:
+                qurey_text = ""
+                self.logger.error("获取最近对话内容失败")
         except Exception as e:
-            self.logger.error("无法获取记忆数据")
+            self.logger.error("无法加载索引")
             self.logger.error("错误信息: " + str(e))
-            
         
-        prompt = {"role":"system","content":GF_PROMPT}
-        meaasge = [prompt]
-        for memory in reversed(memories):
-            meaasge.append(memory)
             
-        self.logger.info("获取到记忆")
-        #print(meaasge)
+        memories = self.memory_store.search_memories(query_text=qurey_text,top_k=30) # 获取对话的相关记忆
+        #self.logger.info(f"搜索记忆结果: {memories[:5]}")
+        for memory in memories[:5]:
+            self.logger.info(f"搜索记忆: {memory['content']}  相关分数： {memory['score']}")
+        memories_short = self.memory_store.get_memories()  #加载最近的记忆
+        if not memories_short:
+            self.logger.error("无最近记忆")
+            return []
+        
+
+        prompt = {"role":"system","content":GF_PROMPT}
+        message = [prompt]
+        for memory in reversed(memories):
+            message.append(memory["content"])
+        try:
+            for memory in reversed(memories_short[:10]):
+                message.append(memory)
+        except Exception as e:
+            self.logger.error(f"无最近记忆")
+            
+        message.append(ast.literal_eval(qurey_text)) # 将最近用户发送的消息放到列表最下面，以便ai进行回复。
+        #print(message)
+        self.logger.info("记忆组建完成")
             
         response = self.client.chat.completions.create(
                 model="deepseek-chat",
                 temperature=0.7,
-                messages=meaasge,
+                messages=message,
                 max_tokens=256,
             )
         answer = response.choices[0].message.content.strip()
@@ -109,10 +127,10 @@ class AIApi:
             self.logger.error(f"错误信息: {e}")
         finally:
             answer_json = {"role": "assistant", "content": str(answer)}
-            self.memory_store.add_memory("ai_msg",content=answer_json)
+            self.memory_store.add_memory("ai_msg",content=answer_json,importance=importance) # 将AI回复存入数据库
         return answer
 
-    def Get_message_importance_and_add_to_memory(self,msg:str):
+    def Get_message_importance_and_add_to_memory(self,msg:str)->int:
         """
         获取消息的importance
 
@@ -156,6 +174,8 @@ class AIApi:
             msg = msg+"当前时间为："+str(datetime.now(self.bj_tz))
             content_json = {"role": "user", "content": msg}
             self.memory_store.add_memory("user_msg",content=content_json,importance=importance)
+        
+        return int(importance)
     
     def Get_check_active_chat(self)->list:
         """
@@ -177,7 +197,7 @@ class AIApi:
         if last_time.tzinfo is None:
             last_time = last_time.replace(tzinfo=pytz.utc)  # 假设timestamp是UTC时间
         
-        if (datetime.now(self.bj_tz) - last_time.astimezone(self.bj_tz)).total_seconds() < random.randint(5*60, 5*60*60):  # 30分钟内聊过
+        if (datetime.now(self.bj_tz) - last_time.astimezone(self.bj_tz)).total_seconds() < random.randint(30*60, 7*60*60):  # 30分钟内聊过
             return []
             
         # 准备主动聊天判断数据
@@ -215,6 +235,8 @@ class AIApi:
             #print(f"主动聊天判断结果: {should_chat}")
             self.logger.info(f"主动聊天判断结果: {should_chat}")
             if should_chat:
+                
+                self.logger.info(f"话题基于记忆{msg[-5:]}")
                 # 生成个性化开场白
                 topic_prompt = f"""基于以下记忆生成一个自然的聊天开场白：
                 注意：
@@ -222,7 +244,7 @@ class AIApi:
                 
                 最后聊天时间：{last_time}
                 当前时间：{datetime.now(self.bj_tz)}
-                最近聊天记录：{json.dumps(context['memories'], ensure_ascii=False)}
+                最近聊天记录：{msg[-30:]}
                 
                 要求：
                 1. 使用可爱的语气和颜文字
@@ -235,7 +257,7 @@ class AIApi:
                     topic_response = client.chat.completions.create(
                         model="deepseek-chat",
                         messages=[{"role":"system","content":GF_PROMPT},{"role": "user", "content": topic_prompt}],
-                        temperature=0.7
+                        temperature=1
                     )
                     opener = topic_response.choices[0].message.content.strip()
                     return ast.literal_eval(opener)

@@ -4,8 +4,14 @@ from pathlib import Path
 from datetime import datetime, timedelta
 from .Logger_owner import Logger
 import pytz
+import faiss
+import numpy as np
+from sentence_transformers import SentenceTransformer
+import pickle  # 新增导入
 
 class MemoryStore:
+
+    _model = None  # 新增模型属性
     def __init__(self, user_id):
         self.user_id = str(user_id)
         self.short_term_db = Path(f"user_memories_short_{user_id}.db")
@@ -13,6 +19,18 @@ class MemoryStore:
         self.bj_tz = pytz.timezone('Asia/Shanghai')
         self._init_dbs()
         self.logger = Logger()
+        
+        # 新增向量索引相关属性
+        
+        # 改用支持中文更好的模型
+        if not MemoryStore._model: # 减少重复加载模型
+            self.embedder = SentenceTransformer("./local_model") # 加载本地模型
+        self.embedder = MemoryStore._model  # 新增模型属性
+        # self.embedder = SentenceTransformer("distilbert-base-nli-stsb-mean-tokens") # 加载中文模型
+        self.dim = self.embedder.get_sentence_embedding_dimension()  # 与模型维度一致
+        self.short_term_index = faiss.IndexFlatL2(self.dim)
+        self.long_term_index = faiss.IndexFlatL2(self.dim)
+        self.id_mapping = {'short': {}, 'long': {}}  # FAISS ID -> 数据库ID
         
     def _init_dbs(self):
         # 短期记忆库(保存7天)
@@ -60,9 +78,7 @@ class MemoryStore:
             content_data = json.dumps(content, ensure_ascii=False)
         else:
             content_data = json.dumps({"role":"assistant","content": str(content)}, ensure_ascii=False)
-        #print(f"[MemoryStore] 添加记忆: {type(content_data)} {content_data}")
         self.logger.info(f"添加记忆: {type(content_data)} {content_data}")
-        
         
         # 添加到短期记忆库(确保importance为整数)
         conn = sqlite3.connect(self.short_term_db)
@@ -72,77 +88,204 @@ class MemoryStore:
                 "INSERT INTO memories (user_id, timestamp, memory_type, content, importance) VALUES (?, ?, ?, ?, ?)",
                 (self.user_id, now, memory_type, content_data, int(importance))
             )
+            new_short_id = cursor.lastrowid
             conn.commit()
         except sqlite3.Error as e:
-            self.Logger.error(f"存储记忆失败: {str(e)}")
+            self.logger.error(f"存储记忆失败: {str(e)}")
             raise
         finally:
             conn.close()
         
-        # 重要记忆(importance>=3)直接添加到长期记忆库
-        if importance >= 3:
-            conn = sqlite3.connect(self.long_term_db)
-            cursor = conn.cursor()
-            cursor.execute(
-                "INSERT INTO memories (user_id, timestamp, memory_type, content, importance) VALUES (?, ?, ?, ?, ?)",
-                (self.user_id, now, memory_type, content_data, importance)
-            )
-            conn.commit()
-            conn.close()
+        # 新增向量索引更新
+        text_content = content['content'] if isinstance(content, dict) else content
+        vector = self.embedder.encode([text_content])[0]
+    
+        # 总是更新短期索引
+        self._update_index('short', vector, new_short_id)
         
-    def clear_memories_long(self):
-        """清理7天的过期记忆"""
-        week_ago = (datetime.now(self.bj_tz) - timedelta(days=7)).isoformat()
+    def _update_index(self, index_type, vector, db_id):
+        """更新指定类型的索引"""
+        vector = vector.reshape(1, -1).astype('float32')
+        index = self.short_term_index if index_type == 'short' else self.long_term_index
+        if index.d != self.dim and index.ntotal > 0:
+            raise ValueError(f"向量维度 {self.dim} 与索引维度 {index.d} 不匹配")
+        index.add(vector)
+    
+        # 记录ID映射
+        faiss_id = index.ntotal - 1
+        self.id_mapping[index_type][faiss_id] = db_id
+
+    
+    def search_memories(self, query_text, top_k=5, time_weight=0.3):
+        """混合检索：语义相似度 + 时间衰减"""
+        # 生成查询向量
+        query_vec = self.embedder.encode([query_text])[0].astype('float32')
         
-        # 从短期库获取所有7天前的记忆
+         # 动态调整搜索范围
+        max_short = min(top_k, self.short_term_index.ntotal) 
+        max_long = min(top_k, self.long_term_index.ntotal)
+
+    
+        # 并行搜索两个索引
+        short_dist, short_idx = self.short_term_index.search(query_vec.reshape(1, -1), max_short or 1)
+        long_dist, long_idx = self.long_term_index.search(query_vec.reshape(1, -1), max_long or 1)
+    
+        # 合并结果并加载元数据
+        candidates = []
+        for i, idx in enumerate(short_idx[0]):
+            if db_id := self.id_mapping['short'].get(idx):
+                record = self._get_memory_by_id('short', db_id)
+                candidates.append(self._calculate_score(record, short_dist[0][i], time_weight))
+    
+        for i, idx in enumerate(long_idx[0]):
+            if db_id := self.id_mapping['long'].get(idx):
+                record = self._get_memory_by_id('long', db_id)
+                candidates.append(self._calculate_score(record, long_dist[0][i], time_weight))
+    
+        # 按综合得分排序
+        return sorted(candidates, key=lambda x: -x['score'])[:top_k]
+
+    def _get_memory_by_id(self, db_type, db_id):
+        """根据ID获取完整记忆"""
+        conn = sqlite3.connect(getattr(self, f"{db_type}_term_db"))
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM memories WHERE id=?", (db_id,))
+        result = cursor.fetchone()
+        conn.close()
+        return {
+        'id': result[0],
+        'timestamp': result[2],
+        'content': json.loads(result[4]),
+        'importance': result[5]
+        }
+
+    def _calculate_score(self, record, distance, time_weight):
+        """计算综合得分"""
+
+        dt = datetime.fromisoformat(record['timestamp'])
+        if not dt.tzinfo:
+            dt = self.bj_tz.localize(dt)
+        else:
+            dt = dt.astimezone(self.bj_tz)
+        hours_passed = (datetime.now(self.bj_tz) - dt).total_seconds() / 3600
+        time_score = 1 / (hours_passed + 1)  # 时间衰减因子
+        # 调整得分计算，增加语义相似度权重
+        semantic_score = 1.0 / (1.0 + distance)  # 使用更合理的距离转换
+        return {
+            'content': record['content'],
+            'score': (0.6 * semantic_score) + (0.1 * time_weight*time_score) + (0.3 * record['importance']/5.0)
+        }
+    
+    def save_indexes(self):
+        """保存索引到文件"""
+        faiss.write_index(self.short_term_index, f"user_{self.user_id}_short.index")
+        faiss.write_index(self.long_term_index, f"user_{self.user_id}_long.index")
+        with open(f"user_{self.user_id}_mapping.pkl", 'wb') as f:
+            pickle.dump(self.id_mapping, f)
+
+    def load_indexes(self):
+        """加载索引文件"""
+        self.short_term_index = faiss.read_index(f"user_{self.user_id}_short.index")
+        self.long_term_index = faiss.read_index(f"user_{self.user_id}_long.index")
+        with open(f"user_{self.user_id}_mapping.pkl", 'rb') as f:
+            self.id_mapping = pickle.load(f)
+            
+    def debug_status(self):
+        """打印系统状态"""
+        # 数据库记录数
+        conn_short = sqlite3.connect(self.short_term_db)
+        count_short = conn_short.execute("SELECT COUNT(*) FROM memories").fetchone()[0]
+        conn_short.close()
+    
+        conn_long = sqlite3.connect(self.long_term_db)
+        count_long = conn_long.execute("SELECT COUNT(*) FROM memories").fetchone()[0]
+        conn_long.close()
+    
+        # 索引状态
+        print(f"""
+        === MemoryStore 调试信息 ===
+        短期记忆库记录数: {count_short}
+        长期记忆库记录数: {count_long}
+        短期索引数量: {self.short_term_index.ntotal}
+        长期索引数量: {self.long_term_index.ntotal}
+        最后检索耗时: {self.last_search_time:.2f}ms
+        """)
+    def clear_memories_short(self):
+        """
+        清理两天前的记忆：
+        1. 将重要性>=3的记忆转移到长期数据库
+        2. 删除两天前的所有记忆
+        """
+        two_days_ago = (datetime.now(self.bj_tz) - timedelta(days=2)).isoformat()
+        
+        # 1. 先查询两天前重要性>=3的记忆
         conn = sqlite3.connect(self.short_term_db)
         cursor = conn.cursor()
         cursor.execute("""
             SELECT timestamp, memory_type, content, importance 
             FROM memories 
-            WHERE user_id = ? AND timestamp <= ?
-        """, (self.user_id, week_ago))
+            WHERE user_id = ? AND importance >= 3 AND timestamp < ?
+        """, (self.user_id, two_days_ago))
         
-        # 添加到长期库
+        # 2. 将这些重要记忆转移到长期数据库
         long_conn = sqlite3.connect(self.long_term_db)
         long_cursor = long_conn.cursor()
-        # 更新长期库中重要性<=3的记忆
-        long_cursor.execute("""
-            UPDATE memories 
-            SET importance = importance - 1 
-            WHERE user_id = ? AND importance <= 3
-        """, (self.user_id,))
-        
-        # 删除长期库中重要性为0的记忆
-        long_cursor.execute("""
-            DELETE FROM memories 
-            WHERE user_id = ? AND importance <= 0
-        """, (self.user_id,))
-        
+        for row in cursor.fetchall():
+            long_cursor.execute(
+                "INSERT INTO memories (user_id, timestamp, memory_type, content, importance) VALUES (?, ?, ?, ?, ?)",
+                (self.user_id, row[0], row[1], row[2], row[3])
+            )
         long_conn.commit()
         long_conn.close()
         
-        # 清理短期库中所有超过7天的记忆（不管重要性）
+        # 3. 删除短期数据库中两天前的所有记忆
         cursor.execute("""
             DELETE FROM memories 
-            WHERE user_id = ? AND timestamp <= ?
-        """, (self.user_id, week_ago))
-        
+            WHERE user_id = ? AND timestamp < ?
+        """, (self.user_id, two_days_ago))
         conn.commit()
         conn.close()
-    def clear_memories_short(self):
-        """
-        删除两天前的重要性小于3的记忆
-        """
-        conn = sqlite3.connect(self.short_term_db)
+        
+        # 4. 重建索引
+        self._rebuild_index('short')
+        self._rebuild_index('long')
+    
+    def _rebuild_index(self, index_type):
+        """全量重建指定索引（short 或 long）"""
+        db_path = getattr(self, f"{index_type}_term_db")
+        conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
-        cursor.execute("""
-            DELETE FROM memories 
-            WHERE user_id = ? AND importance < 3 AND timestamp < ?
-        """, (self.user_id, (datetime.now(self.bj_tz) - timedelta(days=2)).isoformat()))
-        conn.commit()
+        cursor.execute("SELECT id, content FROM memories WHERE user_id = ?", (self.user_id,))
+        rows = cursor.fetchall()
         conn.close()
-        
+
+        if not rows:
+            self.logger.info(f"{index_type} 索引重建：没有找到任何记忆。")
+            return
+
+        vectors = []
+        id_map = {}
+        for i, (db_id, content_json) in enumerate(rows):
+            try:
+                content_dict = json.loads(content_json)
+                text = content_dict.get('content', '')
+                vector = self.embedder.encode([text])[0]
+                vectors.append(vector)
+                id_map[i] = db_id
+            except Exception as e:
+                self.logger.error(f"重建索引时解析出错: {e}")
+
+        index = self.short_term_index if index_type == 'short' else self.long_term_index
+        index.reset()
+        if vectors:
+            index.add(np.array(vectors).astype('float32'))
+            self.id_mapping[index_type] = id_map
+            self.logger.info(f"{index_type} 索引重建成功，共添加向量 {len(vectors)} 条。")
+
+    def rebuild_all_indexes(self):
+        """全量重建所有索引"""
+        self._rebuild_index('short')
+        self._rebuild_index('long')
         
     
     def get_memories(self, memory_type=None):
@@ -226,7 +369,3 @@ class MemoryStore:
         if not result:
             return None
         return json.loads(result[0])
-        
-    
-        
-

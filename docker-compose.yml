@@ -3,7 +3,7 @@ version: "3"
 services:
     napcat:
         environment:
-            - ACCOUNT=3552638520
+            - ACCOUNT=2712065523
             - WS_ENABLE=true
         ports:
             - 3001:3001

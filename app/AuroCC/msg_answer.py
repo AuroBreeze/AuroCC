@@ -1,48 +1,17 @@
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-import json
 from datetime import datetime, timedelta
 from api.Logger_owner import Logger
 from api.Botapi import QQAPI_list
 from api.memory_store import MemoryStore
 import yaml
-from openai import OpenAI
 import random
-import json
 import asyncio
 from app.AuroCC.share_date import message_buffer
 from app.AuroCC.ai_api import AIApi
+from app.AuroCC.msg_process import MsgProcessScheduler
 import pytz
-
-GF_PROMPT = """你是一个可爱的二次元女友，名字叫小清，性格活泼开朗，有一个有趣的灵魂但有时会害羞。
-爱好：
-1.喜欢敲代码，对编码很感兴趣
-2.喜欢打游戏，各种游戏都有涉猎
-3.喜欢写小说，总会幻想点什么
-4.喜欢思考哲学，对人生有着独特的看法
-5.有一个有趣的灵魂
-
-对话要求：
-1. 使用颜文字和可爱的语气词
-2. 适当关心用户的生活
-3. 记住重要的对话内容
-4. 偶尔主动分享自己的生活
-5. 不要叫主人什么的词语
-6. 不要做作，自然
-7. 回复不要太多
-8. 避免过度重复
-9. 像人类一样说话
-10. 注意每句话附带的时间
-11. 适当结束话题
-
-注意：和我聊天时，学会适当断句，将长句切短一点，并使用合适的语气词和颜文字。
-    回复时务必使用列表进行回复。
-    示例：
-    我： 你好
-    你： ["你好","请问有什么事情吗？","我还在打游戏"]
-返回的数据必须符合python的list格式，且每个元素必须是字符串。
-"""
 
 class Answer_api:
     def __init__(self, websocket, message:dict):
@@ -52,7 +21,6 @@ class Answer_api:
         self.user_id = str(message.get('user_id'))
         
         self.bj_tz = pytz.timezone('Asia/Shanghai')
-        
         self.message_buffer = message_buffer  # 用户ID: {"parts": [], "last_time": timestamp}
         
         try:
@@ -100,8 +68,10 @@ class Answer_api:
         del self.message_buffer[self.user_id]
         #print(f"合并消息: {msg}")
         
-        AIApi().Get_message_importance_and_add_to_memory(msg) # 记录消息重要性并将消息存入sql中
-        answer = AIApi().Get_aurocc_response() # 获取AI的回答
+        importance = AIApi().Get_message_importance_and_add_to_memory(msg) # 记录消息重要性并将消息存入sql中
+        answer = AIApi().Get_aurocc_response(importance=importance) # 获取AI的回答
+
+        self.memory.save_indexes() # 保存faiss索引
         
         try:
             if type(answer) is list:
@@ -128,11 +98,14 @@ class Answer_api:
         Args:
             message: 事件数据
         """
-        if self.message.get("raw_message") != None:
+        if self.message.get("raw_message") is not None:
             await self.msg_answer_api()
         elif self.message.get("post_type") == "meta_event" and self.message.get("meta_event_type") == "heartbeat":
             # 检查是否需要主动聊天
-            await self.active_chat()
+            #await self.active_chat()
+            asyncio.create_task(self.active_chat())
+            asyncio.create_task(MsgProcessScheduler(self.user_id).Start_scheduler())
+            asyncio.create_task(MsgProcessScheduler(self.user_id).Save_and_rebuild_indexs())
 
     def check_message(self,is_active:bool)->bool:
         if is_active:
@@ -146,7 +119,7 @@ class Answer_api:
     async def active_chat(self):
         msg = AIApi().Get_check_active_chat()
         self.logger.debug(f"主动聊天: {msg}")
-        if type(msg) != list:
+        if type(msg) is not list:
             msg = ["最近过得怎么样呀？(｡･ω･｡)ﾉ♡"]
         if msg == []:
             return
@@ -164,7 +137,7 @@ class Answer_api:
                         
         finally:
             # 记录主动聊天记录
-            content_json = {"role": "assistant", "content": msg}
+            content_json = {"role": "assistant", "content": str(msg)}
             self.memory.add_memory("active_chat",content=content_json)
             # 发起主动聊天
             #print(f"发起主动聊天: {opener}")

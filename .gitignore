@@ -166,3 +166,7 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 _config.yml
+local_model
+*.db
+*.index
+*.pkl

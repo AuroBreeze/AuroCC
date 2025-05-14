@@ -1,12 +1,21 @@
-FROM python:3.10.12
+# 阿里云镜像示例
+FROM python:3.10.12-slim
 
 WORKDIR /app
 
 COPY requirements.txt .
+
+RUN pip install --upgrade pip
+RUN pip install torch --index-url https://download.pytorch.org/whl/cpu
 RUN pip install --no-cache-dir -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/
 
 COPY . .
 
+RUN pip install .
+
 EXPOSE 3001
 
-CMD ["python", "main.py"]
+RUN python utils/DataMigrator.py
+
+
+CMD ["python","main.py"]
