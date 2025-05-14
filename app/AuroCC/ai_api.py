@@ -86,9 +86,13 @@ class AIApi:
         
             
         memories = self.memory_store.search_memories(query_text=qurey_text,top_k=30) # 获取对话的相关记忆
-        #self.logger.info(f"搜索记忆结果: {memories[:5]}")
-        for memory in memories[:5]:
-            self.logger.info(f"搜索记忆: {memory['content']}  相关分数： {memory['score']}")
+        self.logger.info(f"搜索记忆结果: {memories[:5]}")
+        if memories is not None:
+            for memory in memories[:5]:
+                self.logger.info(f"搜索记忆: {memory['content']}  相关分数： {memory['score']}")
+        else:
+            self.logger.error("搜索记忆无")
+
         memories_short = self.memory_store.get_memories()  #加载最近的记忆
         if not memories_short:
             self.logger.error("无最近记忆")

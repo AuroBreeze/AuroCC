@@ -249,6 +249,7 @@ class MemoryStore:
         # 4. 重建索引
         self._rebuild_index('short')
         self._rebuild_index('long')
+        self.save_indexes()
     
     def _rebuild_index(self, index_type):
         """全量重建指定索引（short 或 long）"""
@@ -286,6 +287,7 @@ class MemoryStore:
         """全量重建所有索引"""
         self._rebuild_index('short')
         self._rebuild_index('long')
+        self.save_indexes()
         
     
     def get_memories(self, memory_type=None):

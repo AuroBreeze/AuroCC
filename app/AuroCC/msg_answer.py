@@ -104,8 +104,8 @@ class Answer_api:
             # 检查是否需要主动聊天
             #await self.active_chat()
             asyncio.create_task(self.active_chat())
-            asyncio.create_task(MsgProcessScheduler(self.user_id).Start_scheduler())
-            asyncio.create_task(MsgProcessScheduler(self.user_id).Save_and_rebuild_indexs())
+            asyncio.create_task(MsgProcessScheduler("1732373074").Start_scheduler())
+            asyncio.create_task(MsgProcessScheduler("1732373074").Save_and_rebuild_indexs())
 
     def check_message(self,is_active:bool)->bool:
         if is_active:
