@@ -65,32 +65,12 @@ class AIApi:
         Returns:
             list: _description_
         """
-                # 获取最近对话上下文 (确保获取有效数据)
-        # try:
-        #     memories = self.memory_store.get_memories()
-        #     #print("获取最近对话上下文...")
-        #     #print(memories)
-        #     if not memories:
-        #         # 数据库为空时初始化第一条记录
-        #         self.memory_store.add_memory("system_msg", {
-        #             "content": "系统初始化",
-        #             "importance": 0
-        #         })
-        #         memories = self.memory_store.get_memories()
-        #         if not memories:
-        #             self.logger.error("无法初始化记忆数据")
-        #             return
-        # except Exception as e:
-        #     self.logger.error("无法获取记忆数据")
-        #     self.logger.error("错误信息: " + str(e))
-        
         try:
-            self.memory_store.load_indexes()
+            self.memory_store.load_indexes() # 加载索引
             self.logger.info("加载索引成功")
             try:
-                qurey_text = str(self.memory_store.get_memory_short())
-                if not qurey_text:
-                                    # 数据库为空时初始化第一条记录
+                qurey_text = str(self.memory_store.get_memory_short()) # 获取刚刚发送的对话内容
+                if not qurey_text:  # 数据库为空时初始化第一条记录
                     self.memory_store.add_memory("system_msg", {
                         "content": "系统初始化",
                         "importance": 0
@@ -105,17 +85,27 @@ class AIApi:
             self.logger.error("错误信息: " + str(e))
         
             
-        memories = self.memory_store.search_memories(query_text=qurey_text,top_k=30)
+        memories = self.memory_store.search_memories(query_text=qurey_text,top_k=30) # 获取对话的相关记忆
         self.logger.info(f"搜索记忆结果: {memories}")
+        memories_short = self.memory_store.get_memories()  #加载最近的记忆
+        if not memories_short:
+            self.logger.error("无最近记忆")
+            return []
+        
 
         prompt = {"role":"system","content":GF_PROMPT}
         message = [prompt]
         for memory in reversed(memories):
             message.append(memory["content"])
-        message.append(ast.literal_eval(qurey_text))
-        print(message)
-        self.logger.info("获取到记忆")
-        #print(meaasge)
+        try:
+            for memory in reversed(memories_short[:10]):
+                message.append(memory)
+        except Exception as e:
+            self.logger.error(f"无最近记忆")
+            
+        message.append(ast.literal_eval(qurey_text)) # 将最近用户发送的消息放到列表最下面，以便ai进行回复。
+        #print(message)
+        self.logger.info("记忆组建完成")
             
         response = self.client.chat.completions.create(
                 model="deepseek-chat",
@@ -135,7 +125,7 @@ class AIApi:
             self.logger.error(f"错误信息: {e}")
         finally:
             answer_json = {"role": "assistant", "content": str(answer)}
-            self.memory_store.add_memory("ai_msg",content=answer_json,importance=importance)
+            self.memory_store.add_memory("ai_msg",content=answer_json,importance=importance) # 将AI回复存入数据库
         return answer
 
     def Get_message_importance_and_add_to_memory(self,msg:str)->int:
