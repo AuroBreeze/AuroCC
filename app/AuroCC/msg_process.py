@@ -27,7 +27,7 @@ class MsgProcess:
 class MsgProcessScheduler:
     def __init__(self, user_id):
         self.msg_process = MsgProcess(user_id)
-        self.bj_tz = pytz.timezone('Asia/Beijing')
+        self.bj_tz = pytz.timezone('Asia/Shanghai')
         
     async def Start_scheduler(self):
         now = datetime.now(self.bj_tz)
