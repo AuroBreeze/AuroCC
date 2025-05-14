@@ -3,7 +3,7 @@ import sqlite3
 import json
 import numpy as np
 
-memory = MemoryStore("1732373074")
+# memory = MemoryStore("1732373074")
 # memory.rebuild_all_indexes()
 class DataMigrator:
     def __init__(self, memory_store):
@@ -64,10 +64,10 @@ print(f"短期索引条目数: {memory.short_term_index.ntotal}")
 # }
 # memory.add_memory("system", test_memory, importance=3)
 
-#memory.load_indexes()
-#memory.rebuild_all_indexes()  # 重建索引确保使用新的评分算法
-#print("索引重建完成，开始测试搜索...")
-res = memory.search_memories("bug", top_k=5, time_weight=0.4)  # 减少top_k以便观察结果
+memory.load_indexes()
+memory.rebuild_all_indexes()  # 重建索引确保使用新的评分算法
+print("索引重建完成，开始测试搜索...")
+res = memory.search_memories("我想要打会游戏", top_k=5, time_weight=0.3)  # 减少top_k以便观察结果
 
 for i in res:
     #print(i)
