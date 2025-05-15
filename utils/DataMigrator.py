@@ -58,7 +58,7 @@ def Main_migrator():
     Logger().info(f"短期索引条目数: {memory.short_term_index.ntotal}")
     
     Logger().info("开始测试搜索...")
-    res = memory.search_memories("我想要打会游戏", top_k=5, time_weight=0.3)  # 减少top_k以便观察结果
+    res = memory.search_memories("吃饱了", top_k=5, time_weight=0.3)  # 减少top_k以便观察结果
     for i in res:
         #print(i)
         Logger().info(f"[相关度:{i['score']:.2f}] {i['content']['content']}")
@@ -68,20 +68,20 @@ def Main_migrator():
 
 if __name__ == "__main__":
     memory = MemoryStore("1732373074")
-    migrator = DataMigrator(memory)
+    # migrator = DataMigrator(memory)
 
-    # 迁移现有数据（首次部署时运行）
-    migrator.migrate_existing_data()
+    # # 迁移现有数据（首次部署时运行）
+    # migrator.migrate_existing_data()
     
-    memory.save_indexes()  # 保存索引
+    # memory.save_indexes()  # 保存索引
 
-    # 验证索引数量
-    print(f"短期索引条目数: {memory.short_term_index.ntotal}")
+    # # 验证索引数量
+    # print(f"短期索引条目数: {memory.short_term_index.ntotal}")
 
     memory.load_indexes()
-    #memory.rebuild_all_indexes()  # 重建索引确保使用新的评分算法
+    memory.rebuild_all_indexes()  # 重建索引确保使用新的评分算法
     print("索引重建完成，开始测试搜索...")
-    res = memory.search_memories("我想要打会游戏", top_k=5, time_weight=0.3)  # 减少top_k以便观察结果
+    res = memory.search_memories("bug", top_k=30, time_weight=0.3)  # 减少top_k以便观察结果
 
     for i in res:
         #print(i)
