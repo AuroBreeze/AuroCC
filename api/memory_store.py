@@ -116,6 +116,10 @@ class MemoryStore:
         # 记录ID映射
         faiss_id = index.ntotal - 1
         self.id_mapping[index_type][faiss_id] = db_id
+        
+        #self.save_indexes()
+        #self.logger.info(f"{index_type} 索引更新：新增向量 {vector} 到索引 {index.ntotal-1}")
+        self.logger.info("向量索引 + 数据库信息 --> 更新成功")
 
     
     def search_memories(self, query_text, top_k=5, time_weight=0.3):
@@ -184,6 +188,8 @@ class MemoryStore:
         faiss.write_index(self.long_term_index, f"user_{self.user_id}_long.index")
         with open(f"user_{self.user_id}_mapping.pkl", 'wb') as f:
             pickle.dump(self.id_mapping, f)
+        
+        self.logger.info(f"索引保存成功：{self.short_term_index.ntotal} 条短期记忆，{self.long_term_index.ntotal} 条长期记忆")
 
     def load_indexes(self):
         """加载索引文件"""

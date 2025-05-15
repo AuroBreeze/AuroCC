@@ -2,6 +2,7 @@ from openai import OpenAI
 import yaml
 from api.Logger_owner import Logger
 from api.memory_store import MemoryStore
+from app.AuroCC.mcp_functions import weather_api
 import json
 import pytz
 from datetime import datetime
@@ -38,7 +39,21 @@ GF_PROMPT = """你是一个可爱的二次元女友，名字叫小清，性格�
     你： ["你好","请问有什么事情吗？","我还在打游戏"]
 返回的数据必须符合python的list格式，且每个元素必须是字符串。
 """
+class Functions_list:
+    def return_weather_api()-> list:
+        functions = [
+        {
+            "name": "weather_api",
+            "description": "获取我的天气情况，获取曲阜的天气信息",
+            "parameters": {
+                "type": "object",
+                "properties": {},     # 没有参数
+                "required": []        # 没有必须字段
+            }
+            }
+        ]
 
+        return functions
 
 class AIApi:
     def __init__(self):
@@ -118,7 +133,29 @@ class AIApi:
                 temperature=0.7,
                 messages=message,
                 max_tokens=256,
+                functions=Functions_list.return_weather_api(),
+                function_call="auto",
             )
+        if response.choices[0].finish_reason == "function_call":
+            func_name = str(response.choices[0].metadata.function_call.name)
+            self.logger.info(f"调用函数: {func_name}")
+            if func_name == "weather_api":
+                self.logger.info("调用天气API")
+                weather_data = weather_api()
+                self.logger.info(f"天气数据: {weather_data}")
+                response_json = {"role": "function","name":func_name,"content": weather_data}
+                self.memory_store.add_memory("function",content=response_json,importance=importance) # 将AI回复存入数据库
+
+                message.append(response.choices[0].message)
+                message.append(response_json)
+                response = self.client.chat.completions.create(
+                    model="deepseek-chat",
+                    temperature=0.7,
+                    messages=message,
+                    max_tokens=256,
+                )
+        else:
+            pass
         answer = response.choices[0].message.content.strip()
         self.logger.info(f"AI回复: {answer},消息类型：{type(answer)}")
         
@@ -261,7 +298,9 @@ class AIApi:
                     topic_response = client.chat.completions.create(
                         model="deepseek-chat",
                         messages=[{"role":"system","content":GF_PROMPT},{"role": "user", "content": topic_prompt}],
-                        temperature=1
+                        temperature=1,
+                        functions=Functions_list.return_weather_api(),
+                        function_call="auto"
                     )
                     opener = topic_response.choices[0].message.content.strip()
                     return ast.literal_eval(opener)
