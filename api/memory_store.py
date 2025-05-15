@@ -32,6 +32,8 @@ class MemoryStore:
         self.long_term_index = faiss.IndexFlatL2(self.dim)
         self.id_mapping = {'short': {}, 'long': {}}  # FAISS ID -> 数据库ID
         
+        self.load_indexes()  # 加载索引
+        
     def _init_dbs(self):
         # 短期记忆库(保存7天)
         conn = sqlite3.connect(self.short_term_db)
@@ -249,6 +251,7 @@ class MemoryStore:
         # 4. 重建索引
         self._rebuild_index('short')
         self._rebuild_index('long')
+        self.save_indexes()
     
     def _rebuild_index(self, index_type):
         """全量重建指定索引（short 或 long）"""
@@ -286,6 +289,7 @@ class MemoryStore:
         """全量重建所有索引"""
         self._rebuild_index('short')
         self._rebuild_index('long')
+        self.save_indexes()
         
     
     def get_memories(self, memory_type=None):
