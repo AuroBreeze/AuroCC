@@ -2,7 +2,7 @@ import requests
 import yaml
 
 try:
-    with open('_config.yml', 'r') as f:
+    with open('_config.yml', 'r',encoding='utf-8') as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
 except FileNotFoundError:
     print("Config file not found.")
