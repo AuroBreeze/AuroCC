@@ -105,6 +105,10 @@ class MemoryStore:
         # 总是更新短期索引
         self._update_index('short', vector, new_short_id)
         
+        # 手动保存索引(每10次更新保存一次)
+        if self.short_term_index.ntotal % 10 == 0:
+            self.save_indexes()
+        
     def _update_index(self, index_type, vector, db_id):
         """更新指定类型的索引"""
         vector = vector.reshape(1, -1).astype('float32')
@@ -117,14 +121,20 @@ class MemoryStore:
         faiss_id = index.ntotal - 1
         self.id_mapping[index_type][faiss_id] = db_id
         
-        #self.save_indexes()
+        # 移除自动保存索引，改为在适当时候手动调用
         #self.logger.info(f"{index_type} 索引更新：新增向量 {vector} 到索引 {index.ntotal-1}")
         self.logger.info("向量索引 + 数据库信息 --> 更新成功")
+        
+        # 验证索引完整性
+        if faiss_id not in self.id_mapping[index_type]:
+            self.logger.error(f"索引更新失败：ID映射未正确更新")
+            raise ValueError("索引更新失败")
 
     
     def search_memories(self, query_text, top_k=5, time_weight=0.3):
         """混合检索：语义相似度 + 时间衰减"""
         # 生成查询向量
+        self.load_indexes()  # 加载索引
         query_vec = self.embedder.encode([query_text])[0].astype('float32')
         
          # 动态调整搜索范围
