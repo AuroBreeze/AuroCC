@@ -2,7 +2,6 @@ from datetime import datetime
 import pytz
 from api.memory_store import MemoryStore
 from api.Logger_owner import Logger
-from app.AuroCC.share_date import judge_message_short_task
 
 class MsgProcess:
     def __init__(self, user_id):
@@ -32,12 +31,10 @@ class MsgProcessScheduler:
     async def Start_scheduler(self):
         now = datetime.now(self.bj_tz)
         
-        if (now.hour >= 10 and now.hour<=11) or (now.hour >= 22 and now.hour<= 23):
-            if judge_message_short_task == False:
-                self.msg_process.Clear_memories_short()
-                judge_message_short_task = True # 设置为True,完成任务
-        else:
-            judge_message_short_task = False # 重置为False,等待下一次任务
+        if now.hour == 10 and now.minute==30:
+
+            self.msg_process.Clear_memories_short()
+
     
     async def Save_and_rebuild_indexs(self):
         now = datetime.now(self.bj_tz)

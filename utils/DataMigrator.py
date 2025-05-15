@@ -59,11 +59,19 @@ if __name__ == "__main__":
     print(f"短期索引条目数: {memory.short_term_index.ntotal}")
 
     memory.load_indexes()
-    memory.rebuild_all_indexes()  # 重建索引确保使用新的评分算法
+    #memory.rebuild_all_indexes()  # 重建索引确保使用新的评分算法
     print("索引重建完成，开始测试搜索...")
     res = memory.search_memories("我想要打会游戏", top_k=5, time_weight=0.3)  # 减少top_k以便观察结果
 
     for i in res:
         #print(i)
         print(f"[相关度:{i['score']:.2f}] {i['content']['content']}")
+    
+    memory.add_memory("test",{"role":"user","content":"test"},importance=3)
+    # memory.load_indexes()
+    mem =memory.search_memories("test",top_k=5,time_weight=0.3)
+    memory.add_memory("test",{"role":"user","content":"bug"},importance=3)
+    mem1 = memory.search_memories("bug",top_k=5,time_weight=0.3)
+    print(mem1)
+    memory.save_indexes()
         

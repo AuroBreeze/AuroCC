@@ -32,6 +32,8 @@ class MemoryStore:
         self.long_term_index = faiss.IndexFlatL2(self.dim)
         self.id_mapping = {'short': {}, 'long': {}}  # FAISS ID -> 数据库ID
         
+        self.load_indexes()  # 加载索引
+        
     def _init_dbs(self):
         # 短期记忆库(保存7天)
         conn = sqlite3.connect(self.short_term_db)
