@@ -22,8 +22,9 @@ class Answer_api:
         
         self.bj_tz = pytz.timezone('Asia/Shanghai')
         self.message_buffer = message_buffer  # 用户ID: {"parts": [], "last_time": timestamp}
+        
         self.memory = memory_store  # 向量索引
-        self.memory.load_indexes()
+        self.memory.load_indexes()  # 导入索引
         
         try:
             with open("_config.yml", 'r', encoding='utf-8') as f:

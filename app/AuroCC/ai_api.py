@@ -68,8 +68,12 @@ class AIApi:
         
         self.client = OpenAI(api_key=self.config["basic_settings"]['API_token'],
                              base_url="https://api.deepseek.com")
-        self.memory_store = memory_store
-        self.memory_store.load_indexes()
+        
+        
+        self.memory_store = memory_store  # 导入记忆数据库
+        self.memory_store.load_indexes() # 加载索引
+        
+        
         self.bj_tz = pytz.timezone('Asia/Shanghai')
     
     def Get_aurocc_response(self,importance:int) -> list:

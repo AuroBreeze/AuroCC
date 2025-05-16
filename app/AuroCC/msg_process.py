@@ -31,7 +31,7 @@ class MsgProcessScheduler:
     async def Start_scheduler(self):
         now = datetime.now(self.bj_tz)
         
-        if now.hour == 10 and now.minute==30:
+        if now.hour == 10 and now.minute==10:
 
             self.msg_process.Clear_memories_short()
 

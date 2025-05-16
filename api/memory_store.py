@@ -31,8 +31,8 @@ class MemoryStore:
         self.short_term_index = faiss.IndexFlatL2(self.dim)
         self.long_term_index = faiss.IndexFlatL2(self.dim)
         self.id_mapping = {'short': {}, 'long': {}}  # FAISS ID -> 数据库ID
-        
-        self.load_indexes()  # 加载索引
+
+        self.logger.info("MemoryStore init success")
         
     def _init_dbs(self):
         # 短期记忆库(保存7天)
@@ -106,8 +106,8 @@ class MemoryStore:
         self._update_index('short', vector, new_short_id)
         
         # 手动保存索引(每10次更新保存一次)
-        if self.short_term_index.ntotal % 10 == 0:
-            self.save_indexes()
+    
+        self.save_indexes()
         
     def _update_index(self, index_type, vector, db_id):
         """更新指定类型的索引"""
@@ -265,8 +265,7 @@ class MemoryStore:
         conn.close()
         
         # 4. 重建索引
-        self._rebuild_index('short')
-        self._rebuild_index('long')
+        self.rebuild_all_indexes()
         self.save_indexes()
     
     def _rebuild_index(self, index_type):
