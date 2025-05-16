@@ -1,7 +1,7 @@
 from openai import OpenAI
 import yaml
 from api.Logger_owner import Logger
-from api.memory_store import MemoryStore
+from app.AuroCC.share_date import memory_store
 from app.AuroCC.mcp_functions import weather_api
 import json
 import pytz
@@ -68,7 +68,8 @@ class AIApi:
         
         self.client = OpenAI(api_key=self.config["basic_settings"]['API_token'],
                              base_url="https://api.deepseek.com")
-        self.memory_store = MemoryStore(self.QQbot_admin_account)
+        self.memory_store = memory_store
+        self.memory_store.load_indexes()
         self.bj_tz = pytz.timezone('Asia/Shanghai')
     
     def Get_aurocc_response(self,importance:int) -> list:
@@ -119,7 +120,7 @@ class AIApi:
         for memory in reversed(memories):
             message.append(memory["content"])
         try:
-            for memory in reversed(memories_short[:10]):
+            for memory in reversed(memories_short[:20]):
                 message.append(memory)
         except Exception as e:
             self.logger.error(f"无最近记忆")
