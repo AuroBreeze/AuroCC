@@ -148,16 +148,18 @@ class AIApi:
             message.append(response.choices[0].message)
             
             if tool_call.function.name == "weather_api":
-                #print("调用了天气API")
                 self.logger.info("调用天气API")
                 weather_info = weather_api()
-                message.append({
+
+                content_json = {
                     "role": "tool",
                     "content": str(weather_info),
-                    "tool_call_id": tool_call.id
-                })
-                self.memory_store.add_memory("tool_call",{"role": "tool","content":str(weather_info)})
-
+                    "tool_call_id": tool_call.id,
+                    "name": "weather_api"
+                }
+                
+                message.append(content_json)
+                
                 # 获取最终响应
                 response = self.client.chat.completions.create(
                     model="deepseek-chat",
