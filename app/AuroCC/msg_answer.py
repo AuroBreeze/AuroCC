@@ -18,7 +18,7 @@ class Answer_api:
         self.logger = Logger()
         self.message = message
         self.websocket = websocket
-        self.user_id = str(message.get('user_id'))
+        #self.user_id = str(message.get('user_id'))
         
         self.bj_tz = pytz.timezone('Asia/Shanghai')
         self.message_buffer = message_buffer  # 用户ID: {"parts": [], "last_time": timestamp}
@@ -29,6 +29,7 @@ class Answer_api:
         try:
             with open("_config.yml", 'r', encoding='utf-8') as f:
                 self.yml = yaml.load(f, Loader=yaml.FullLoader)
+                self.user_id = str(self.yml["basic_settings"]["QQbot_admin_account"])
         except Exception as e:
             self.logger.error(f"配置文件读取失败: {e}")
             
@@ -89,8 +90,7 @@ class Answer_api:
     async def msg_send_api(self,answer,is_active=False):
         if self.check_message(is_active):
             # 私聊消息
-            user_id = self.yml["basic_settings"]["QQbot_admin_account"]
-            await QQAPI_list(self.websocket).send_message(str(user_id), answer)
+            await QQAPI_list(self.websocket).send_message(self.user_id, answer)
 
     async def handle_event(self):
         """统一处理各种事件(消息/心跳)
@@ -103,15 +103,15 @@ class Answer_api:
             # 检查是否需要主动聊天
             #await self.active_chat()
             asyncio.create_task(self.active_chat())
-            asyncio.create_task(MsgProcessScheduler("1732373074").Start_scheduler())
-            asyncio.create_task(MsgProcessScheduler("1732373074").Save_and_rebuild_indexs())
+            asyncio.create_task(MsgProcessScheduler(self.user_id).Start_scheduler())
+            asyncio.create_task(MsgProcessScheduler(self.user_id).Save_and_rebuild_indexs())
 
     def check_message(self,is_active:bool)->bool:
         if is_active:
             return True
         if self.message.get("message_type") == "private":
             if self.message.get("sub_type") == "friend":
-                if str(self.message.get("user_id")) == str(self.yml["basic_settings"]["QQbot_admin_account"]):
+                if str(self.message.get("user_id")) == self.user_id:
                     return True
         return False
 

@@ -3,6 +3,7 @@ from api.Logger_owner import Logger
 import sqlite3
 import json
 import numpy as np
+import yaml
 
 class DataMigrator:
     def __init__(self, memory_store):
@@ -67,7 +68,14 @@ def Main_migrator():
         
 
 if __name__ == "__main__":
-    memory = MemoryStore("1732373074")
+    try:
+        with open("./_config.yml",r,encoding="utf-8") as f:
+            config = yaml.load(f,Loader=yaml.FullLoader)
+            user_id = str(config["basic_settings"]["QQbot_admin_account"])
+    except FileNotFoundError:
+        Logger().error("Config file not found.")
+        exit()
+    memory = MemoryStore(user_id)
     migrator = DataMigrator(memory)
 
     # 迁移现有数据（首次部署时运行）
