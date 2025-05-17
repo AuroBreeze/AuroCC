@@ -5,7 +5,7 @@ setup(
     version="0.1",
     packages=find_packages(),
     package_data={
-        '': ['*.db', '*.yml'],
+        '': ['*.db', '*.yml','*.index','*.pkl'],
     },
     include_package_data=True,
 )
