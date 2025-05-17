@@ -148,15 +148,23 @@ class MemoryStore:
     
         # 合并结果并加载元数据
         candidates = []
+        seen_contents = set()  # 用于去重
+        
         for i, idx in enumerate(short_idx[0]):
             if db_id := self.id_mapping['short'].get(idx):
                 record = self._get_memory_by_id('short', db_id)
-                candidates.append(self._calculate_score(record, short_dist[0][i], time_weight))
+                content_str = json.dumps(record['content'], sort_keys=True)
+                if content_str not in seen_contents:
+                    seen_contents.add(content_str)
+                    candidates.append(self._calculate_score(record, short_dist[0][i], time_weight))
     
         for i, idx in enumerate(long_idx[0]):
             if db_id := self.id_mapping['long'].get(idx):
                 record = self._get_memory_by_id('long', db_id)
-                candidates.append(self._calculate_score(record, long_dist[0][i], time_weight))
+                content_str = json.dumps(record['content'], sort_keys=True)
+                if content_str not in seen_contents:
+                    seen_contents.add(content_str)
+                    candidates.append(self._calculate_score(record, long_dist[0][i], time_weight))
     
         # 按综合得分排序
         return sorted(candidates, key=lambda x: -x['score'])[:top_k]
@@ -283,10 +291,20 @@ class MemoryStore:
 
         vectors = []
         id_map = {}
+        seen_contents = set()
+        
         for i, (db_id, content_json) in enumerate(rows):
             try:
                 content_dict = json.loads(content_json)
                 text = content_dict.get('content', '')
+                content_str = json.dumps(content_dict, sort_keys=True)
+                
+                # 跳过重复内容
+                if content_str in seen_contents:
+                    self.logger.warning(f"跳过重复内容: {text[:50]}...")
+                    continue
+                seen_contents.add(content_str)
+                
                 vector = self.embedder.encode([text])[0]
                 vectors.append(vector)
                 id_map[i] = db_id
@@ -299,6 +317,11 @@ class MemoryStore:
             index.add(np.array(vectors).astype('float32'))
             self.id_mapping[index_type] = id_map
             self.logger.info(f"{index_type} 索引重建成功，共添加向量 {len(vectors)} 条。")
+            
+        # 验证索引完整性
+        if index.ntotal != len(id_map):
+            self.logger.error(f"索引不一致: 索引数量={index.ntotal}, 映射数量={len(id_map)}")
+            raise ValueError("索引重建失败: 索引与映射不一致")
 
     def rebuild_all_indexes(self):
         """全量重建所有索引"""
