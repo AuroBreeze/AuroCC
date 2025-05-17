@@ -157,4 +157,4 @@ importance = AIApi().Get_message_importance_and_add_to_memory("你好")
 
 ## 📜 许可证
 
-MIT License - 详见 [LICENSE](LICENSE) 文件
+GPL v3.0 License - 详见 [LICENSE](LICENSE) 文件
