@@ -164,29 +164,6 @@ class AIApi:
                     messages=message,
                     max_tokens=80
                 )
-                #print(final_response.choices[0].message.content)
-        # if response.choices[0].finish_reason == "function_call":
-        #     func_name = str(response.choices[0].metadata.function_call.name)
-        #     self.logger.info(f"调用函数: {func_name}")
-        #     if func_name == "weather_api":
-        #         self.logger.info("调用天气API")
-        #         weather_data = weather_api()
-        #         self.logger.info(f"天气数据: {weather_data}")
-        #         response_json = {"role": "function",
-        #                          "name": func_name, "content": weather_data}
-        #         self.memory_store.add_memory(
-        #             "function", content=response_json, importance=importance)  # 将AI回复存入数据库
-
-        #         message.append(response.choices[0].message)
-        #         message.append(response_json)
-        #         response = self.client.chat.completions.create(
-        #             model="deepseek-chat",
-        #             temperature=0.7,
-        #             messages=message,
-        #             max_tokens=256,
-        #         )
-        # else:
-        #     pass
         answer = response.choices[0].message.content.strip()
         self.logger.info(f"AI回复: {answer},消息类型：{type(answer)}")
 
@@ -328,6 +305,7 @@ class AIApi:
                 2. 可以结合之前的聊天内容
                 3. 自然不做作
                 4. 可以是关心、分享或提问
+                5. 使用不同的话题，话题要有趣。
                 只需返回生成的开场白内容"""
 
                 try:
