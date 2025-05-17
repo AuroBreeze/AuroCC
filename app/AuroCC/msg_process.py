@@ -1,12 +1,12 @@
 from datetime import datetime
 import pytz
-from api.memory_store import MemoryStore
+from app.AuroCC.share_date import memory_store
 from api.Logger_owner import Logger
 
 class MsgProcess:
     def __init__(self, user_id):
         self.bj_tz = pytz.timezone('Asia/Shanghai')
-        self.memory_store = MemoryStore(user_id)
+        self.memory_store = memory_store
         self.logger = Logger()
         pass
 
@@ -31,7 +31,7 @@ class MsgProcessScheduler:
     async def Start_scheduler(self):
         now = datetime.now(self.bj_tz)
         
-        if now.hour == 10 and now.minute==30:
+        if now.hour == 10 and now.minute==10:
 
             self.msg_process.Clear_memories_short()
 

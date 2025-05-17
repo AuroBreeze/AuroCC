@@ -58,7 +58,7 @@ def Main_migrator():
     Logger().info(f"短期索引条目数: {memory.short_term_index.ntotal}")
     
     Logger().info("开始测试搜索...")
-    res = memory.search_memories("我想要打会游戏", top_k=5, time_weight=0.3)  # 减少top_k以便观察结果
+    res = memory.search_memories("吃饱了", top_k=5, time_weight=0.3)  # 减少top_k以便观察结果
     for i in res:
         #print(i)
         Logger().info(f"[相关度:{i['score']:.2f}] {i['content']['content']}")
@@ -81,7 +81,7 @@ if __name__ == "__main__":
     memory.load_indexes()
     #memory.rebuild_all_indexes()  # 重建索引确保使用新的评分算法
     print("索引重建完成，开始测试搜索...")
-    res = memory.search_memories("我想要打会游戏", top_k=5, time_weight=0.3)  # 减少top_k以便观察结果
+    res = memory.search_memories("bug", top_k=30, time_weight=0.3)  # 减少top_k以便观察结果
 
     for i in res:
         #print(i)

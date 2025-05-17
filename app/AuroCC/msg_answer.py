@@ -4,7 +4,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 from datetime import datetime, timedelta
 from api.Logger_owner import Logger
 from api.Botapi import QQAPI_list
-from api.memory_store import MemoryStore
+from app.AuroCC.share_date import memory_store
 import yaml
 import random
 import asyncio
@@ -23,13 +23,14 @@ class Answer_api:
         self.bj_tz = pytz.timezone('Asia/Shanghai')
         self.message_buffer = message_buffer  # 用户ID: {"parts": [], "last_time": timestamp}
         
+        self.memory = memory_store  # 向量索引
+        self.memory.load_indexes()  # 导入索引
+        
         try:
-            with open("./_config.yml", "r", encoding="utf-8") as f:
-                self.yml = yaml.safe_load(f)
-                self.memory = MemoryStore(self.yml["basic_settings"]["QQbot_admin_account"])
+            with open("_config.yml", 'r', encoding='utf-8') as f:
+                self.yml = yaml.load(f, Loader=yaml.FullLoader)
         except Exception as e:
-            self.logger.error("配置文件config.yaml加载失败")
-            self.logger.error(e)
+            self.logger.error(f"配置文件读取失败: {e}")
             
             
         
@@ -70,8 +71,6 @@ class Answer_api:
         
         importance = AIApi().Get_message_importance_and_add_to_memory(msg) # 记录消息重要性并将消息存入sql中
         answer = AIApi().Get_aurocc_response(importance=importance) # 获取AI的回答
-
-        self.memory.save_indexes() # 保存faiss索引
         
         try:
             if type(answer) is list:
@@ -142,7 +141,3 @@ class Answer_api:
             # 发起主动聊天
             #print(f"发起主动聊天: {opener}")
             self.logger.info(f"发起主动聊天: {msg}")
-        
-
-        
-        

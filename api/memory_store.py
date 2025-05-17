@@ -31,8 +31,8 @@ class MemoryStore:
         self.short_term_index = faiss.IndexFlatL2(self.dim)
         self.long_term_index = faiss.IndexFlatL2(self.dim)
         self.id_mapping = {'short': {}, 'long': {}}  # FAISS ID -> 数据库ID
-        
-        self.load_indexes()  # 加载索引
+
+        self.logger.info("MemoryStore init success")
         
     def _init_dbs(self):
         # 短期记忆库(保存7天)
@@ -105,6 +105,10 @@ class MemoryStore:
         # 总是更新短期索引
         self._update_index('short', vector, new_short_id)
         
+        # 手动保存索引(每10次更新保存一次)
+    
+        self.save_indexes()
+        
     def _update_index(self, index_type, vector, db_id):
         """更新指定类型的索引"""
         vector = vector.reshape(1, -1).astype('float32')
@@ -116,11 +120,21 @@ class MemoryStore:
         # 记录ID映射
         faiss_id = index.ntotal - 1
         self.id_mapping[index_type][faiss_id] = db_id
+        
+        # 移除自动保存索引，改为在适当时候手动调用
+        #self.logger.info(f"{index_type} 索引更新：新增向量 {vector} 到索引 {index.ntotal-1}")
+        self.logger.info("向量索引 + 数据库信息 --> 更新成功")
+        
+        # 验证索引完整性
+        if faiss_id not in self.id_mapping[index_type]:
+            self.logger.error(f"索引更新失败：ID映射未正确更新")
+            raise ValueError("索引更新失败")
 
     
     def search_memories(self, query_text, top_k=5, time_weight=0.3):
         """混合检索：语义相似度 + 时间衰减"""
         # 生成查询向量
+        self.load_indexes()  # 加载索引
         query_vec = self.embedder.encode([query_text])[0].astype('float32')
         
          # 动态调整搜索范围
@@ -134,15 +148,23 @@ class MemoryStore:
     
         # 合并结果并加载元数据
         candidates = []
+        seen_contents = set()  # 用于去重
+        
         for i, idx in enumerate(short_idx[0]):
             if db_id := self.id_mapping['short'].get(idx):
                 record = self._get_memory_by_id('short', db_id)
-                candidates.append(self._calculate_score(record, short_dist[0][i], time_weight))
+                content_str = json.dumps(record['content'], sort_keys=True)
+                if content_str not in seen_contents:
+                    seen_contents.add(content_str)
+                    candidates.append(self._calculate_score(record, short_dist[0][i], time_weight))
     
         for i, idx in enumerate(long_idx[0]):
             if db_id := self.id_mapping['long'].get(idx):
                 record = self._get_memory_by_id('long', db_id)
-                candidates.append(self._calculate_score(record, long_dist[0][i], time_weight))
+                content_str = json.dumps(record['content'], sort_keys=True)
+                if content_str not in seen_contents:
+                    seen_contents.add(content_str)
+                    candidates.append(self._calculate_score(record, long_dist[0][i], time_weight))
     
         # 按综合得分排序
         return sorted(candidates, key=lambda x: -x['score'])[:top_k]
@@ -184,6 +206,8 @@ class MemoryStore:
         faiss.write_index(self.long_term_index, f"user_{self.user_id}_long.index")
         with open(f"user_{self.user_id}_mapping.pkl", 'wb') as f:
             pickle.dump(self.id_mapping, f)
+        
+        self.logger.info(f"索引保存成功：{self.short_term_index.ntotal} 条短期记忆，{self.long_term_index.ntotal} 条长期记忆")
 
     def load_indexes(self):
         """加载索引文件"""
@@ -249,8 +273,7 @@ class MemoryStore:
         conn.close()
         
         # 4. 重建索引
-        self._rebuild_index('short')
-        self._rebuild_index('long')
+        self.rebuild_all_indexes()
         self.save_indexes()
     
     def _rebuild_index(self, index_type):
@@ -268,10 +291,20 @@ class MemoryStore:
 
         vectors = []
         id_map = {}
+        seen_contents = set()
+        
         for i, (db_id, content_json) in enumerate(rows):
             try:
                 content_dict = json.loads(content_json)
                 text = content_dict.get('content', '')
+                content_str = json.dumps(content_dict, sort_keys=True)
+                
+                # 跳过重复内容
+                if content_str in seen_contents:
+                    self.logger.warning(f"跳过重复内容: {text[:50]}...")
+                    continue
+                seen_contents.add(content_str)
+                
                 vector = self.embedder.encode([text])[0]
                 vectors.append(vector)
                 id_map[i] = db_id
@@ -284,6 +317,11 @@ class MemoryStore:
             index.add(np.array(vectors).astype('float32'))
             self.id_mapping[index_type] = id_map
             self.logger.info(f"{index_type} 索引重建成功，共添加向量 {len(vectors)} 条。")
+            
+        # 验证索引完整性
+        if index.ntotal != len(id_map):
+            self.logger.error(f"索引不一致: 索引数量={index.ntotal}, 映射数量={len(id_map)}")
+            raise ValueError("索引重建失败: 索引与映射不一致")
 
     def rebuild_all_indexes(self):
         """全量重建所有索引"""
