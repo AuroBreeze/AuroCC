@@ -69,7 +69,7 @@ def Main_migrator():
 
 if __name__ == "__main__":
     try:
-        with open("./_config.yml",r,encoding="utf-8") as f:
+        with open("./_config.yml","r",encoding="utf-8") as f:
             config = yaml.load(f,Loader=yaml.FullLoader)
             user_id = str(config["basic_settings"]["QQbot_admin_account"])
     except FileNotFoundError:
