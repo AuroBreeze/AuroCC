@@ -142,15 +142,13 @@ class AIApi:
             tools=tools,
             # functions=Functions_list.return_weather_api(),
             # function_call="auto",
-        )
+        ) 
         if response.choices[0].finish_reason == "tool_calls":
             tool_call = response.choices[0].message.tool_calls[0]
-            message.append(response.choices[0].message)
-            
             if tool_call.function.name == "weather_api":
+                message.append(response.choices[0].message) # 加入工具调用消息
                 self.logger.info("调用天气API")
                 weather_info = weather_api()
-
                 content_json = {
                     "role": "tool",
                     "content": str(weather_info),
