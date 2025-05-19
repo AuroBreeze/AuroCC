@@ -15,7 +15,12 @@ RUN pip install .
 
 EXPOSE 3001
 
+RUN python utils/Create_dirs.py
+
+RUN pip install .
+
 RUN python utils/DataMigrator.py
 
+RUN pip install .
 
 CMD ["python","main.py"]

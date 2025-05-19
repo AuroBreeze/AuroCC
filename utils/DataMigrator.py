@@ -54,8 +54,6 @@ class DataMigrator:
     
 def Main_migrator(user_id:str):
     
-    os.makedirs(dev.INDEX_STORE_PATH,exist_ok=True) # 创建索引存储目录
-    os.makedirs(dev.MEMORY_STORE_PATH,exist_ok=True) # 创建记忆存储目录
     """主函数"""
     memory = MemoryStore(user_id)
     migrator = DataMigrator(memory)
