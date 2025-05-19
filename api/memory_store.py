@@ -11,10 +11,13 @@ import pickle  # 新增导入
 from config import dev
 from utils.download_model import download
 
+
 class MemoryStore:
 
     _model = None  # 新增模型属性
     def __init__(self, user_id):
+
+        
         self.user_id = str(user_id)
         self.short_term_db = Path(dev.MEMORY_STORE_PATH+f"user_memories_short_{user_id}.db")
         self.long_term_db = Path(dev.MEMORY_STORE_PATH+f"user_memories_long_{user_id}.db")
@@ -39,10 +42,10 @@ class MemoryStore:
         self.long_term_index = faiss.IndexFlatL2(self.dim)
         self.id_mapping = {'short': {}, 'long': {}}  # FAISS ID -> 数据库ID
         
-        self.short_index_save_path = Path(dev.MEMORY_STORE_PATH+f"user_memories_short_{user_id}_index.pkl")
-        self.long_index_save_path = Path(dev.MEMORY_STORE_PATH+f"user_memories_long_{user_id}_index.pkl")
-        self.pkl_save_path = Path(dev.MEMORY_STORE_PATH+f"user_memories_{user_id}.pkl")
-
+        self.short_index_save_path = dev.INDEX_STORE_PATH+f"user_memories_short_{user_id}_index.pkl"
+        self.long_index_save_path = dev.INDEX_STORE_PATH+f"user_memories_long_{user_id}_index.pkl"
+        self.pkl_save_path = dev.INDEX_STORE_PATH+f"user_memories_{user_id}.pkl"
+        
         self.logger.info("MemoryStore init success")
         
     def _init_dbs(self):
@@ -212,6 +215,7 @@ class MemoryStore:
         }
     
     def save_indexes(self):
+        
         """保存索引到文件"""
         faiss.write_index(self.short_term_index, self.short_index_save_path)
         faiss.write_index(self.long_term_index, self.long_index_save_path)
@@ -223,7 +227,7 @@ class MemoryStore:
     def load_indexes(self):
         """加载索引文件"""
         self.short_term_index = faiss.read_index(self.short_index_save_path)
-        self.long_term_index = faiss.read_index(self.short_index_save_path)
+        self.long_term_index = faiss.read_index(self.long_index_save_path)
         with open(self.pkl_save_path, 'rb') as f:
             self.id_mapping = pickle.load(f)
             
