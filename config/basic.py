@@ -2,6 +2,9 @@
 QQ_BOT  = 'your_qq_bot_id' # QQ Bot ID QQ机器人账号
 QQ_ADMIN = 'your_qq_admin_id' # QQ Admin ID QQ管理员账号
 
+# ws settings for development environment
+WS_URL = "ws://napcat:3001"
+
 
 # KEY settings for development environment
 DEEPSEEK_API_KEY = 'your_deepseek_api_key' # DeepSeek API Key
