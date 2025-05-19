@@ -4,11 +4,14 @@ import sqlite3
 import json
 import numpy as np
 from config import dev
+import os
 
 class DataMigrator:
     def __init__(self, memory_store):
         self.store = memory_store
         self.logger = Logger()
+        
+
         
     def migrate_existing_data(self, batch_size=500):
         """迁移短期记忆库中的已有数据"""
@@ -50,6 +53,9 @@ class DataMigrator:
         })
     
 def Main_migrator(user_id:str):
+    
+    os.makedirs(dev.INDEX_STORE_PATH,exist_ok=True) # 创建索引存储目录
+    os.makedirs(dev.MEMORY_STORE_PATH,exist_ok=True) # 创建记忆存储目录
     """主函数"""
     memory = MemoryStore(user_id)
     migrator = DataMigrator(memory)
