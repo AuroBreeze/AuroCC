@@ -9,6 +9,7 @@ from datetime import datetime
 import random
 import asyncio
 import ast
+from config import dev
 
 
 GF_PROMPT = """你是一个可爱的二次元女友，名字叫小清，性格活泼开朗，有一个有趣的灵魂但有时会害羞。
@@ -59,15 +60,8 @@ tools = [
 class AIApi:
     def __init__(self):
         self.logger = Logger()
-        try:
-            with open("./_config.yml", "r", encoding="utf-8") as f:
-                self.config = yaml.safe_load(f)
-                self.QQbot_admin_account = self.config["basic_settings"]["QQbot_admin_account"]
-        except FileNotFoundError:
-            self.logger.error("Config file not found.")
-            exit()
 
-        self.client = OpenAI(api_key=self.config["basic_settings"]['API_token'],
+        self.client = OpenAI(api_key=dev.DEEPSEEK_API_KEY,
                              base_url="https://api.deepseek.com")
 
         self.memory_store = memory_store  # 导入记忆数据库
@@ -208,11 +202,7 @@ class AIApi:
         只需返回数字1-5"""
         importance = 1
         try:
-            client = OpenAI(
-                api_key=self.config["basic_settings"]['API_token'],
-                base_url="https://api.deepseek.com"
-            )
-            response = client.chat.completions.create(
+            response = self.client.chat.completions.create(
                 model="deepseek-chat",
                 messages=[{"role": "system", "content": GF_PROMPT},
                           {"role": "user", "content": importance_prompt}],
@@ -274,11 +264,7 @@ class AIApi:
         4. 自己没有道晚安或别的类似再见等等一段时间的命令
         只需返回true或false"""
         try:
-            client = OpenAI(
-                api_key=self.config["basic_settings"]['API_token'],
-                base_url="https://api.deepseek.com"
-            )
-            response = client.chat.completions.create(
+            response = self.client.chat.completions.create(
                 model="deepseek-chat",
                 messages=[{"role": "system", "content": GF_PROMPT},
                           {"role": "user", "content": prompt}],
@@ -309,7 +295,7 @@ class AIApi:
                 只需返回生成的开场白内容"""
 
                 try:
-                    topic_response = client.chat.completions.create(
+                    topic_response = self.client.chat.completions.create(
                         model="deepseek-chat",
                         messages=[{"role": "system", "content": GF_PROMPT}, {
                             "role": "user", "content": topic_prompt}],
