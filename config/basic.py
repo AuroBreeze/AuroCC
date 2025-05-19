@@ -19,3 +19,6 @@ INDEX_STORE_PATH = './store/index/' # FAISS Index store path 向量数据库索�
 # FAISS 向量数据库emmbedding模型    
 MODEL_CHOOSE = 'distilbert-base-nli-stsb-mean-tokens' # Model choose 选择模型
 MODEL_STORE_PATH = './local_model/' # Model store path 模型保存位置
+
+# timezone  settings for development environment
+TIMEZONE = 'Asia/Shanghai' # Timezone 时区

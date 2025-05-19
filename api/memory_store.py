@@ -21,7 +21,7 @@ class MemoryStore:
         self.user_id = str(user_id)
         self.short_term_db = Path(dev.MEMORY_STORE_PATH+f"user_memories_short_{user_id}.db")
         self.long_term_db = Path(dev.MEMORY_STORE_PATH+f"user_memories_long_{user_id}.db")
-        self.bj_tz = pytz.timezone('Asia/Shanghai')
+        self.bj_tz = pytz.timezone(dev.TIMEZONE)
         self._init_dbs()
         self.logger = Logger()
         

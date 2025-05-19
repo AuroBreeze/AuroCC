@@ -12,6 +12,7 @@ from app.AuroCC.share_date import message_buffer
 from app.AuroCC.ai_api import AIApi
 from app.AuroCC.msg_process import MsgProcessScheduler
 import pytz
+from config import dev
 
 class Answer_api:
     def __init__(self, websocket, message:dict):
@@ -20,18 +21,13 @@ class Answer_api:
         self.websocket = websocket
         #self.user_id = str(message.get('user_id'))
         
-        self.bj_tz = pytz.timezone('Asia/Shanghai')
+        self.bj_tz = pytz.timezone(dev.TIMEZONE)
         self.message_buffer = message_buffer  # 用户ID: {"parts": [], "last_time": timestamp}
         
         self.memory = memory_store  # 向量索引
         self.memory.load_indexes()  # 导入索引
         
-        try:
-            with open("_config.yml", 'r', encoding='utf-8') as f:
-                self.yml = yaml.load(f, Loader=yaml.FullLoader)
-                self.user_id = str(self.yml["basic_settings"]["QQbot_admin_account"])
-        except Exception as e:
-            self.logger.error(f"配置文件读取失败: {e}")
+        self.user_id = dev.QQ_ADMIN
             
             
         
