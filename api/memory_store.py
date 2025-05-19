@@ -42,8 +42,8 @@ class MemoryStore:
         self.long_term_index = faiss.IndexFlatL2(self.dim)
         self.id_mapping = {'short': {}, 'long': {}}  # FAISS ID -> 数据库ID
         
-        self.short_index_save_path = dev.INDEX_STORE_PATH+f"user_memories_short_{user_id}_index.pkl"
-        self.long_index_save_path = dev.INDEX_STORE_PATH+f"user_memories_long_{user_id}_index.pkl"
+        self.short_index_save_path = dev.INDEX_STORE_PATH+f"user_memories_short_{user_id}.index"
+        self.long_index_save_path = dev.INDEX_STORE_PATH+f"user_memories_long_{user_id}.index"
         self.pkl_save_path = dev.INDEX_STORE_PATH+f"user_memories_{user_id}.pkl"
         
         self.logger.info("MemoryStore init success")
