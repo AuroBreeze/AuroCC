@@ -10,4 +10,3 @@ try:
         AMAP_KEY = config['basic_settings']['Weather_api_key']
 except Exception as e:
     print(e)
-print(QQ_ADMIN)
