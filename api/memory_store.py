@@ -8,14 +8,16 @@ import faiss
 import numpy as np
 from sentence_transformers import SentenceTransformer
 import pickle  # 新增导入
+from config import dev
+from utils.download_model import download
 
 class MemoryStore:
 
     _model = None  # 新增模型属性
     def __init__(self, user_id):
         self.user_id = str(user_id)
-        self.short_term_db = Path(f"./store/memory_store/user_memories_short_{user_id}.db")
-        self.long_term_db = Path(f"./store/memory_store/user_memories_long_{user_id}.db")
+        self.short_term_db = Path(dev.MEMORY_STORE_PATH+f"user_memories_short_{user_id}.db")
+        self.long_term_db = Path(dev.MEMORY_STORE_PATH+f"user_memories_long_{user_id}.db")
         self.bj_tz = pytz.timezone('Asia/Shanghai')
         self._init_dbs()
         self.logger = Logger()
@@ -23,10 +25,15 @@ class MemoryStore:
         # 新增向量索引相关属性
         
         # 改用支持中文更好的模型
-        if not MemoryStore._model: # 减少重复加载模型
-            MemoryStore._model = SentenceTransformer("./local_model") # 加载本地模型
+        try:
+            if not MemoryStore._model: # 减少重复加载模型
+                MemoryStore._model = SentenceTransformer(dev.MODEL_STORE_PATH) # 加载本地模型
+        except Exception as e:
+            self.logger.warning(f"加载模型失败: {str(e)}")
+            download()  # 下载并加载模型
+            MemoryStore._model = SentenceTransformer(dev.MODEL_STORE_PATH) # 加载本地模型
+
         self.embedder = MemoryStore._model  # 新增模型属性
-        # self.embedder = SentenceTransformer("distilbert-base-nli-stsb-mean-tokens") # 加载中文模型
         self.dim = self.embedder.get_sentence_embedding_dimension()  # 与模型维度一致
         self.short_term_index = faiss.IndexFlatL2(self.dim)
         self.long_term_index = faiss.IndexFlatL2(self.dim)
@@ -202,18 +209,18 @@ class MemoryStore:
     
     def save_indexes(self):
         """保存索引到文件"""
-        faiss.write_index(self.short_term_index, f"./store/index/user_{self.user_id}_short.index")
-        faiss.write_index(self.long_term_index, f"./store/index/user_{self.user_id}_long.index")
-        with open(f"./store/index/user_{self.user_id}_mapping.pkl", 'wb') as f:
+        faiss.write_index(self.short_term_index, dev.INDEX_STORE_PATH+f"user_{self.user_id}_short.index")
+        faiss.write_index(self.long_term_index, dev.INDEX_STORE_PATH+f"user_{self.user_id}_long.index")
+        with open(dev.INDEX_STORE_PATH+f"user_{self.user_id}_mapping.pkl", 'wb') as f:
             pickle.dump(self.id_mapping, f)
         
         self.logger.info(f"索引保存成功：{self.short_term_index.ntotal} 条短期记忆，{self.long_term_index.ntotal} 条长期记忆")
 
     def load_indexes(self):
         """加载索引文件"""
-        self.short_term_index = faiss.read_index(f"./store/index/user_{self.user_id}_short.index")
-        self.long_term_index = faiss.read_index(f"./store/index/user_{self.user_id}_long.index")
-        with open(f"./store/index/user_{self.user_id}_mapping.pkl", 'rb') as f:
+        self.short_term_index = faiss.read_index(dev.INDEX_STORE_PATH+f"user_{self.user_id}_short.index")
+        self.long_term_index = faiss.read_index(dev.INDEX_STORE_PATH+f"user_{self.user_id}_long.index")
+        with open(dev.MEMORY_STORE_PATH+f"user_{self.user_id}_mapping.pkl", 'rb') as f:
             self.id_mapping = pickle.load(f)
             
     def debug_status(self):
