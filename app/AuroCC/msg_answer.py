@@ -5,7 +5,6 @@ from datetime import datetime, timedelta
 from api.Logger_owner import Logger
 from api.Botapi import QQAPI_list
 from app.AuroCC.share_date import memory_store
-import yaml
 import random
 import asyncio
 from app.AuroCC.share_date import message_buffer
