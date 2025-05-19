@@ -3,7 +3,7 @@ from api.Logger_owner import Logger
 import sqlite3
 import json
 import numpy as np
-import yaml
+from config import dev
 
 class DataMigrator:
     def __init__(self, memory_store):
@@ -49,15 +49,19 @@ class DataMigrator:
             for i, db_id in enumerate(db_ids)
         })
     
-def Main_migrator():
+def Main_migrator(user_id:str):
     """主函数"""
-    memory = MemoryStore("1732373074")
+    memory = MemoryStore(user_id)
     migrator = DataMigrator(memory)
     migrator.migrate_existing_data()
     memory.save_indexes()  # 保存索引
     Logger().info("数据迁移完成")
     Logger().info(f"短期索引条目数: {memory.short_term_index.ntotal}")
     
+    memory.load_indexes()  # 加载索引
+    Logger().info("索引加载完成")
+    #memory.rebuild_all_indexes()  # 重建索引确保使用新的评分算法
+    #Logger().info("索引重建完成")
     Logger().info("开始测试搜索...")
     res = memory.search_memories("吃饱了", top_k=5, time_weight=0.3)  # 减少top_k以便观察结果
     for i in res:
@@ -65,35 +69,6 @@ def Main_migrator():
         Logger().info(f"[相关度:{i['score']:.2f}] {i['content']['content']}")
     
     Logger().info("测试搜索完成")
-        
-
-if __name__ == "__main__":
-    try:
-        with open("./_config.yml","r",encoding="utf-8") as f:
-            config = yaml.load(f,Loader=yaml.FullLoader)
-            user_id = str(config["basic_settings"]["QQbot_admin_account"])
-    except FileNotFoundError:
-        Logger().error("Config file not found.")
-        exit()
-    memory = MemoryStore(user_id)
-    migrator = DataMigrator(memory)
-
-    # 迁移现有数据（首次部署时运行）
-    migrator.migrate_existing_data()
-    
-    memory.save_indexes()  # 保存索引
-
-    # 验证索引数量
-    print(f"短期索引条目数: {memory.short_term_index.ntotal}")
-
-    memory.load_indexes()
-    #memory.rebuild_all_indexes()  # 重建索引确保使用新的评分算法
-    print("索引重建完成，开始测试搜索...")
-    res = memory.search_memories("bug", top_k=30, time_weight=0.3)  # 减少top_k以便观察结果
-
-    for i in res:
-        #print(i)
-        print(f"[相关度:{i['score']:.2f}] {i['content']['content']}")
     
     # memory.add_memory("test",{"role":"user","content":"test"},importance=3)
     # # memory.load_indexes()
@@ -102,4 +77,10 @@ if __name__ == "__main__":
     # mem1 = memory.search_memories("bug",top_k=5,time_weight=0.3)
     # print(mem1)
     # memory.save_indexes()
+        
+
+if __name__ == "__main__":
+    user_id = dev.QQ_ADMIN
+    Main_migrator(user_id)
+
         
