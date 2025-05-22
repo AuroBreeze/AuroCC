@@ -1,13 +1,10 @@
 from openai import OpenAI
-import yaml
 from api.Logger_owner import Logger
 from app.AuroCC.share_date import memory_store
 from app.AuroCC.mcp_functions import weather_api
-import json
 import pytz
 from datetime import datetime
 import random
-import asyncio
 import ast
 from config import dev
 
@@ -97,9 +94,9 @@ class AIApi:
         except Exception as e:
             self.logger.error("无法加载索引")
             self.logger.error("错误信息: " + str(e))
+            qurey_text = "" # 未定义情况的处理
 
-        memories = self.memory_store.search_memories(
-            query_text=qurey_text, top_k=30)  # 获取对话的相关记忆
+        memories = self.memory_store.search_memories(query_text=qurey_text, top_k=30)  # 获取对话的相关记忆
         self.logger.info(f"搜索记忆结果: {memories[:5]}")
         if memories is not None:
             for memory in memories[:10]:
@@ -164,7 +161,7 @@ class AIApi:
         try:
             answer = ast.literal_eval(answer)
         except Exception as e:
-            answer = "我无法回答你的问题(｡･ω･｡)"
+            answer = ["我无法回答你的问题(｡･ω･｡)"]
             self.logger.error(f"AI回复错误: {answer}")
             self.logger.error(f"无法将AI回复解析为list数据: {answer}")
             self.logger.error(f"错误信息: {e}")
@@ -270,8 +267,7 @@ class AIApi:
                           {"role": "user", "content": prompt}],
                 temperature=0.1
             )
-            should_chat = response.choices[0].message.content.strip(
-            ).lower() == "true"
+            should_chat = response.choices[0].message.content.strip().lower() == "true"
             # print(f"主动聊天判断结果: {should_chat}")
             self.logger.info(f"主动聊天判断结果: {should_chat}")
             if should_chat:
@@ -317,3 +313,4 @@ class AIApi:
             return []
         except Exception as e:
             self.logger.error(f"主动聊天判断失败: {str(e)}")
+        return []

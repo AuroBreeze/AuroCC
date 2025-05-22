@@ -8,5 +8,6 @@ try:
         QQ_BOT = config['basic_settings']['QQbot_account']
         DEEPSEEK_API_KEY = config['basic_settings']['API_token']
         AMAP_KEY = config['basic_settings']['Weather_api_key']
+        WS_URL = "ws://127.0.0.1:3001"
 except Exception as e:
     print(e)
