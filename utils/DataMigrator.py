@@ -4,7 +4,6 @@ import sqlite3
 import json
 import numpy as np
 from config import dev
-import os
 
 class DataMigrator:
     def __init__(self, memory_store):
