@@ -17,7 +17,7 @@ def create_config():
     }
     
     # 写入YAML文件
-    with open(config_dir / 'config.yml', 'w', encoding='utf-8') as file:
+    with open(config_dir / '_config.yml', 'w', encoding='utf-8') as file:
         yaml.dump(config, file, allow_unicode=True, sort_keys=False)
 
 if __name__ == '__main__':
