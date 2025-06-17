@@ -3,7 +3,7 @@ from api.Logger_owner import Logger
 import sqlite3
 import json
 import numpy as np
-from config import dev
+from config import env
 
 class DataMigrator:
     def __init__(self, memory_store):
@@ -83,7 +83,7 @@ def Main_migrator(user_id:str):
         
 
 if __name__ == "__main__":
-    user_id = dev.QQ_ADMIN
+    user_id = env.QQ_ADMIN
     Main_migrator(user_id)
 
         

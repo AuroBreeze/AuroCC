@@ -1,7 +1,7 @@
 import sqlite3
 import json
 from pprint import pprint
-from config import dev
+from config import env
 
 def show_db_contents(db_path):
     conn = sqlite3.connect(db_path)
@@ -34,4 +34,4 @@ def show_db_contents(db_path):
     conn.close()
 
 if __name__ == "__main__":
-    show_db_contents(dev.DB_PATH+f"user_memories_short_{dev.QQ_ADMIN}.db")
+    show_db_contents(env.DB_PATH+f"user_memories_short_{env.QQ_ADMIN}.db")
