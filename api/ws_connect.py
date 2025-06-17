@@ -3,7 +3,7 @@ from api.Logger_owner import Logger # 美化日志输出
 from api.Share_date import Raw_data # 导入原始数据队列
 import asyncio
 from api.Msg_dispatcher import Msg_dispatcher
-from config.dev import WS_URL
+from config.env import WS_URL
 
 class Websocket_receiver:
     def __init__(self):

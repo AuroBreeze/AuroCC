@@ -1,7 +1,7 @@
 from config.basic import *
 from api import Logger_owner
 
-logs = Logger_owner.Logger(log_name='ENV').error(2)
+logs = Logger_owner.Logger(log_name='ENV')
 current_env = 'dev'
 
 try:
@@ -20,4 +20,3 @@ if current_env == 'dev':
 elif current_env == 'prod':
     pass
 
-print(WS_URL)
