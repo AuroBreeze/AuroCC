@@ -16,11 +16,10 @@ class MemoryStore:
 
     _model = None  # 新增模型属性
     def __init__(self, user_id):
-
-        
         self.user_id = str(user_id)
-        self.short_term_db = Path(env.MEMORY_STORE_PATH+f"user_memories_short_{user_id}.db")
-        self.long_term_db = Path(env.MEMORY_STORE_PATH+f"user_memories_long_{user_id}.db")
+        # 使用统一数据库文件
+        self.db_file = Path(env.MEMORY_STORE_PATH + "aurocc_memories.db")
+        self.conn = sqlite3.connect(self.db_file)
         self.bj_tz = pytz.timezone(env.TIMEZONE)
         self._init_dbs()
         self.logger = Logger("MemoryStore")
@@ -49,37 +48,40 @@ class MemoryStore:
         self.logger.info("MemoryStore init success")
         
     def _init_dbs(self):
-        # 短期记忆库(保存7天)
-        conn = sqlite3.connect(self.short_term_db)
-        cursor = conn.cursor()
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS memories (
+        cursor = self.conn.cursor()
+        # 创建短期记忆表
+        cursor.execute(f"""
+        CREATE TABLE IF NOT EXISTS user_{self.user_id}_short_memories (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id TEXT,
-            timestamp DATETIME,
-            memory_type TEXT,
-            content TEXT,
+            timestamp DATETIME NOT NULL,
+            memory_type TEXT NOT NULL,
+            content TEXT NOT NULL,
             importance INTEGER DEFAULT 0
         )
         """)
-        conn.commit()
-        conn.close()
         
-        # 长期记忆库(精选重要记忆)
-        conn = sqlite3.connect(self.long_term_db)
-        cursor = conn.cursor()
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS memories (
+        # 创建长期记忆表
+        cursor.execute(f"""
+        CREATE TABLE IF NOT EXISTS user_{self.user_id}_long_memories (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id TEXT,
-            timestamp DATETIME,
-            memory_type TEXT,
-            content TEXT,
+            timestamp DATETIME NOT NULL,
+            memory_type TEXT NOT NULL,
+            content TEXT NOT NULL,
             importance INTEGER DEFAULT 2
         )
         """)
-        conn.commit()
-        conn.close()
+        
+        # 创建索引
+        cursor.execute(f"""
+        CREATE INDEX IF NOT EXISTS idx_user_{self.user_id}_short_time 
+        ON user_{self.user_id}_short_memories(timestamp)
+        """)
+        cursor.execute(f"""
+        CREATE INDEX IF NOT EXISTS idx_user_{self.user_id}_long_importance 
+        ON user_{self.user_id}_long_memories(importance)
+        """)
+        
+        self.conn.commit()
         
     def add_memory(self, memory_type, content, importance=0):
         """添加记忆到短期和长期数据库
@@ -97,20 +99,17 @@ class MemoryStore:
         self.logger.info(f"添加记忆: {type(content_data)} {content_data}")
         
         # 添加到短期记忆库(确保importance为整数)
-        conn = sqlite3.connect(self.short_term_db)
-        cursor = conn.cursor()
         try:
+            cursor = self.conn.cursor()
             cursor.execute(
-                "INSERT INTO memories (user_id, timestamp, memory_type, content, importance) VALUES (?, ?, ?, ?, ?)",
-                (self.user_id, now, memory_type, content_data, int(importance))
+                f"INSERT INTO user_{self.user_id}_short_memories (timestamp, memory_type, content, importance) VALUES (?, ?, ?, ?)",
+                (now, memory_type, content_data, int(importance))
             )
             new_short_id = cursor.lastrowid
-            conn.commit()
+            self.conn.commit()
         except sqlite3.Error as e:
             self.logger.error(f"存储记忆失败: {str(e)}")
             raise
-        finally:
-            conn.close()
         
         # 新增向量索引更新
         text_content = content['content'] if isinstance(content, dict) else content
@@ -185,16 +184,15 @@ class MemoryStore:
 
     def _get_memory_by_id(self, db_type, db_id):
         """根据ID获取完整记忆"""
-        conn = sqlite3.connect(getattr(self, f"{db_type}_term_db"))
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM memories WHERE id=?", (db_id,))
+        cursor = self.conn.cursor()
+        table_name = f"user_{self.user_id}_{db_type}_memories"
+        cursor.execute(f"SELECT * FROM {table_name} WHERE id=?", (db_id,))
         result = cursor.fetchone()
-        conn.close()
         return {
         'id': result[0],
-        'timestamp': result[2],
-        'content': json.loads(result[4]),
-        'importance': result[5]
+        'timestamp': result[1],
+        'content': json.loads(result[3]),
+        'importance': result[4]
         }
 
     def _calculate_score(self, record, distance, time_weight):
@@ -233,14 +231,15 @@ class MemoryStore:
             
     def debug_status(self):
         """打印系统状态"""
-        # 数据库记录数
-        conn_short = sqlite3.connect(self.short_term_db)
-        count_short = conn_short.execute("SELECT COUNT(*) FROM memories").fetchone()[0]
-        conn_short.close()
-    
-        conn_long = sqlite3.connect(self.long_term_db)
-        count_long = conn_long.execute("SELECT COUNT(*) FROM memories").fetchone()[0]
-        conn_long.close()
+        cursor = self.conn.cursor()
+        
+        # 查询短期记忆记录数
+        cursor.execute(f"SELECT COUNT(*) FROM user_{self.user_id}_short_memories")
+        count_short = cursor.fetchone()[0]
+        
+        # 查询长期记忆记录数
+        cursor.execute(f"SELECT COUNT(*) FROM user_{self.user_id}_long_memories")
+        count_long = cursor.fetchone()[0]
     
         # 索引状态
         print(f"""
@@ -259,46 +258,45 @@ class MemoryStore:
         """
         two_days_ago = (datetime.now(self.bj_tz) - timedelta(days=2)).isoformat()
         
-        # 1. 先查询两天前重要性>=3的记忆
-        conn = sqlite3.connect(self.short_term_db)
-        cursor = conn.cursor()
-        cursor.execute("""
-            SELECT timestamp, memory_type, content, importance 
-            FROM memories 
-            WHERE user_id = ? AND importance >= 3 AND timestamp < ?
-        """, (self.user_id, two_days_ago))
-        
-        # 2. 将这些重要记忆转移到长期数据库
-        long_conn = sqlite3.connect(self.long_term_db)
-        long_cursor = long_conn.cursor()
-        for row in cursor.fetchall():
-            long_cursor.execute(
-                "INSERT INTO memories (user_id, timestamp, memory_type, content, importance) VALUES (?, ?, ?, ?, ?)",
-                (self.user_id, row[0], row[1], row[2], row[3])
-            )
-        long_conn.commit()
-        long_conn.close()
-        
-        # 3. 删除短期数据库中两天前的所有记忆
-        cursor.execute("""
-            DELETE FROM memories 
-            WHERE user_id = ? AND timestamp < ?
-        """, (self.user_id, two_days_ago))
-        conn.commit()
-        conn.close()
-        
-        # 4. 重建索引
-        self.rebuild_all_indexes()
-        self.save_indexes()
+        try:
+            cursor = self.conn.cursor()
+            # 1. 先查询两天前重要性>=3的记忆
+            cursor.execute(f"""
+                SELECT timestamp, memory_type, content, importance 
+                FROM user_{self.user_id}_short_memories
+                WHERE importance >= 3 AND timestamp < ?
+            """, (two_days_ago,))
+            
+            # 2. 将这些重要记忆转移到长期数据库
+            for row in cursor.fetchall():
+                cursor.execute(f"""
+                    INSERT INTO user_{self.user_id}_long_memories 
+                    (timestamp, memory_type, content, importance) 
+                    VALUES (?, ?, ?, ?)
+                """, (row[0], row[1], row[2], row[3]))
+            
+            # 3. 删除短期数据库中两天前的所有记忆
+            cursor.execute(f"""
+                DELETE FROM user_{self.user_id}_short_memories 
+                WHERE timestamp < ?
+            """, (two_days_ago,))
+            
+            self.conn.commit()
+            
+            # 4. 重建索引
+            self.rebuild_all_indexes()
+            self.save_indexes()
+            
+        except sqlite3.Error as e:
+            self.logger.error(f"清理记忆失败: {str(e)}")
+            raise
     
     def _rebuild_index(self, index_type):
         """全量重建指定索引（short 或 long）"""
-        db_path = getattr(self, f"{index_type}_term_db")
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-        cursor.execute("SELECT id, content FROM memories WHERE user_id = ?", (self.user_id,))
+        cursor = self.conn.cursor()
+        table_name = f"user_{self.user_id}_{index_type}_memories"
+        cursor.execute(f"SELECT id, content FROM {table_name}")
         rows = cursor.fetchall()
-        conn.close()
 
         if not rows:
             self.logger.info(f"{index_type} 索引重建：没有找到任何记忆。")
@@ -348,53 +346,42 @@ class MemoryStore:
     def get_memories(self, memory_type=None):
         """合并查询两个数据库的记忆"""
         results = []
-    
+        cursor = self.conn.cursor()
 
-        # 先获取短期记忆
-        conn = sqlite3.connect(self.short_term_db)
-        cursor = conn.cursor()
-    
-        query = "SELECT content FROM memories WHERE user_id = ?"
-        params = [self.user_id]
-    
+        # 查询短期记忆
+        query = f"SELECT content FROM user_{self.user_id}_short_memories"
+        params = []
+        
         if memory_type:
-            query += " AND memory_type = ?"
+            query += " WHERE memory_type = ?"
             params.append(memory_type)
         
         query += " ORDER BY timestamp DESC"
-    
         cursor.execute(query, params)
         results.extend(json.loads(row[0]) for row in cursor.fetchall())
-        conn.close()
+
+        # 查询长期记忆
+        query = f"SELECT content FROM user_{self.user_id}_long_memories"
+        params = []
         
-        # 再获取长期记忆
-        conn = sqlite3.connect(self.long_term_db)
-        cursor = conn.cursor()
-    
-        query = "SELECT content FROM memories WHERE user_id = ?"
-        params = [self.user_id]
-    
         if memory_type:
-            query += " AND memory_type = ?"
+            query += " WHERE memory_type = ?"
             params.append(memory_type)
         
         query += " ORDER BY importance DESC, timestamp DESC"
-    
         cursor.execute(query, params)
         results.extend(json.loads(row[0]) for row in cursor.fetchall())
-        conn.close()
-    
-        #print(results)
+
         return results
     def get_memory_short_time(self):
         """
         查询最近聊天的时间点
         """
-        conn = sqlite3.connect(self.short_term_db)
-        cursor = conn.cursor()
-        cursor.execute("""
-            SELECT timestamp FROM memories WHERE user_id = ? ORDER BY timestamp DESC LIMIT 1
-        """, (self.user_id,))
+        cursor = self.conn.cursor()
+        cursor.execute(f"""
+            SELECT timestamp FROM user_{self.user_id}_short_memories 
+            ORDER BY timestamp DESC LIMIT 1
+        """)
         result = cursor.fetchone()
         if not result:
             return None
@@ -404,11 +391,11 @@ class MemoryStore:
         """
         查询最近的短期记忆
         """
-        conn = sqlite3.connect(self.short_term_db)
-        cursor = conn.cursor()
-        cursor.execute("""
-            SELECT content FROM memories WHERE user_id = ? ORDER BY timestamp DESC LIMIT 1
-        """, (self.user_id,))
+        cursor = self.conn.cursor()
+        cursor.execute(f"""
+            SELECT content FROM user_{self.user_id}_short_memories 
+            ORDER BY timestamp DESC LIMIT 1
+        """)
         result = cursor.fetchone()
         if not result:
             return None
@@ -417,11 +404,11 @@ class MemoryStore:
         """
         查询最近的长期记忆
         """
-        conn = sqlite3.connect(self.long_term_db)
-        cursor = conn.cursor()
-        cursor.execute("""
-            SELECT content FROM memories WHERE user_id = ? ORDER BY timestamp DESC LIMIT 1
-        """, (self.user_id,))
+        cursor = self.conn.cursor()
+        cursor.execute(f"""
+            SELECT content FROM user_{self.user_id}_long_memories 
+            ORDER BY timestamp DESC LIMIT 1
+        """)
         result = cursor.fetchone()
         if not result:
             return None

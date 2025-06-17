@@ -67,11 +67,51 @@
 #     print(123)
 
 
-json_test = {
-    "tes": "q23"
-}
+# json_test = {
+#     "tes": "q23"
+# }
 
-print(type(json_test),json_test)
-print(json_test["tes"])
+# print(type(json_test),json_test)
+# print(json_test["tes"])
 
+import sqlite3
+from pathlib import Path
+from config import env
+
+term_db = Path(env.MEMORY_STORE_PATH+f"memories.db")
+
+conn = sqlite3.connect(term_db)
+cursor = conn.cursor()
+cursor.execute("""CREATE TABLE IF NOT EXISTS memories (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT,
+    memory_type TEXT,
+    content TEXT,
+    timestamp TEXT,
+    importance REAL
+)""")
+cursor.execute("""CREATE TABLE IF NOT EXISTS memories_short (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+               user_id TEXT,
+                memory_type TEXT,
+                content TEXT,
+                timestamp TEXT,
+                importance REAL,
+                last_reviewed TEXT,
+                next_review TEXT
+)""")
+
+cursor.execute("""CREATE TABLE IF NOT EXISTS memories_long (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT,
+                memory_type TEXT,
+                content TEXT,
+                timestamp TEXT,
+                importance REAL,
+                last_reviewed TEXT,
+                next_review TEXT
+)""")
+
+conn.commit()
+conn.close()
 
