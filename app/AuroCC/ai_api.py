@@ -30,7 +30,7 @@ tools = [
 
 class AIApi:
     def __init__(self):
-        self.logger = Logger()
+        self.logger = Logger("AIApi")
 
         self.client = OpenAI(api_key=env.DEEPSEEK_API_KEY,
                              base_url="https://api.deepseek.com")

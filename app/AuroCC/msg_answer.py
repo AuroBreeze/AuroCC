@@ -15,7 +15,7 @@ from config import env
 
 class Answer_api:
     def __init__(self, websocket, message:dict):
-        self.logger = Logger()
+        self.logger = Logger("Answer_api")
         self.message = message
         self.websocket = websocket
         #self.user_id = str(message.get('user_id'))

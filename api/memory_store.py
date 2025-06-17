@@ -23,7 +23,7 @@ class MemoryStore:
         self.long_term_db = Path(env.MEMORY_STORE_PATH+f"user_memories_long_{user_id}.db")
         self.bj_tz = pytz.timezone(env.TIMEZONE)
         self._init_dbs()
-        self.logger = Logger()
+        self.logger = Logger("MemoryStore")
         
         # 新增向量索引相关属性
         

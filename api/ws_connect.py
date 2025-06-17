@@ -7,7 +7,7 @@ from config.dev import WS_URL
 
 class Websocket_receiver:
     def __init__(self):
-        self.logger = Logger()  # 实例化日志类
+        self.logger = Logger("Websocket_receiver")  # 实例化日志类
         self.url = WS_URL  # 使用Docker服务名称代替localhost
 
     async def msg_raw_receiver(self):
