@@ -1,12 +1,25 @@
 import colorlog
+from datetime import datetime
+import pytz
+from config import basic
 
 class Logger:
-    def __init__(self):
+    def __init__(self, log_name='root'):
         # 创建日志记录器
-        self.logger = colorlog.getLogger('root')  # 创建日志记录器
-        # 设置日志输出格式,输出INFO级别的日志
-        colorlog.basicConfig(level='INFO', format='%(log_color)s[%(asctime)s][%(name)s][%(levelname)s] %(message)s',
-                             datefmt='%Y-%m-%d %H:%M:%S', reset=True)  # 设置日志输出级别
+        self.logger = colorlog.getLogger(log_name)  # 创建日志记录器
+        # 设置日志输出格式,输出INFO级别的日志，并添加时区信息
+        colorlog.basicConfig(
+            level='INFO', 
+            format='%(log_color)s[%(asctime)s Shanghai][%(name)s][%(levelname)s] %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S', 
+            reset=True
+        )
+        # 获取UTC时区
+        self.tz = basic.TIMEZONE
+
+    def _get_time(self):
+        # 获取当前上海时间
+        return datetime.now(self.tz)
 
     def info(self, message):
         if message == "":
@@ -34,5 +47,5 @@ class Logger:
 
 if __name__ == '__main__':
     # 创建日志记录器
-    logger = Logger().info('This is an info message')
+    logger = Logger().info('This is an info message with Shanghai time')
     # 输出INFO级别的日志

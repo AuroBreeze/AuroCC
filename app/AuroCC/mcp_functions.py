@@ -1,11 +1,6 @@
 import requests
 import yaml
-
-try:
-    with open('_config.yml', 'r',encoding='utf-8') as f:
-        config = yaml.load(f, Loader=yaml.FullLoader)
-except FileNotFoundError:
-    print("Config file not found.")
+from config import env
 def weather_api()->dict:
     """
     获取曲阜的天气信息
@@ -14,7 +9,7 @@ def weather_api()->dict:
     url = "https://restapi.amap.com/v3/weather/weatherInfo"
     params = {
         "city": "370881",
-        "key": config["basic_settings"]["Weather_api_key"]
+        "key": env.AMAP_KEY
     }
     
     response = requests.get(url, params=params).json()

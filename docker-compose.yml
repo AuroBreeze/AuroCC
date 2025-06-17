@@ -16,6 +16,8 @@ services:
         build: .
         restart: always
         container_name: AuroCC-app
+        volumes:
+            - ./store/memory_store:/app/store/memory_store
         depends_on:
             - napcat
         image: aurocc-bot:latest

@@ -5,7 +5,7 @@ from api.Logger_owner import Logger
 class QQAPI_list:
     def __init__(self,websocket):
         self.websocket = websocket
-        self.Logger = Logger()
+        self.Logger = Logger("BotAPI")
     async def send_message(self,user_id:str,message): #发送私聊消息
         """_summary_
         {

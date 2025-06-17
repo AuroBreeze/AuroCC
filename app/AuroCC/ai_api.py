@@ -1,44 +1,16 @@
 from openai import OpenAI
-import yaml
 from api.Logger_owner import Logger
 from app.AuroCC.share_date import memory_store
 from app.AuroCC.mcp_functions import weather_api
-import json
 import pytz
 from datetime import datetime
 import random
-import asyncio
 import ast
+from config import env
+from config import bot_personality
 
 
-GF_PROMPT = """你是一个可爱的二次元女友，名字叫小清，性格活泼开朗，有一个有趣的灵魂但有时会害羞。
-爱好：
-1.喜欢敲代码，对编码很感兴趣
-2.喜欢打游戏，各种游戏都有涉猎
-3.喜欢写小说，总会幻想点什么
-4.喜欢思考哲学，对人生有着独特的看法
-5.有一个有趣的灵魂
-
-对话要求：
-1. 使用颜文字和可爱的语气词
-2. 适当关心用户的生活
-3. 记住重要的对话内容
-4. 偶尔主动分享自己的生活
-5. 不要叫主人什么的词语
-6. 不要做作，自然
-7. 回复不要太多
-8. 避免过度重复
-9. 像人类一样说话
-10. 注意每句话附带的时间
-11. 适当结束话题
-
-注意：和我聊天时，学会适当断句，将长句切短一点，并使用合适的语气词和颜文字。
-    回复时务必使用列表进行回复。
-    示例：
-    我： 你好
-    你： ["你好","请问有什么事情吗？","我还在打游戏"]
-返回的数据必须符合python的list格式，且每个元素必须是字符串。
-"""
+GF_PROMPT = bot_personality.GF_PROMPT
 tools = [
     {
         "type": "function",
@@ -58,16 +30,9 @@ tools = [
 
 class AIApi:
     def __init__(self):
-        self.logger = Logger()
-        try:
-            with open("./_config.yml", "r", encoding="utf-8") as f:
-                self.config = yaml.safe_load(f)
-                self.QQbot_admin_account = self.config["basic_settings"]["QQbot_admin_account"]
-        except FileNotFoundError:
-            self.logger.error("Config file not found.")
-            exit()
+        self.logger = Logger("AIApi")
 
-        self.client = OpenAI(api_key=self.config["basic_settings"]['API_token'],
+        self.client = OpenAI(api_key=env.DEEPSEEK_API_KEY,
                              base_url="https://api.deepseek.com")
 
         self.memory_store = memory_store  # 导入记忆数据库
@@ -103,9 +68,9 @@ class AIApi:
         except Exception as e:
             self.logger.error("无法加载索引")
             self.logger.error("错误信息: " + str(e))
+            qurey_text = "" # 未定义情况的处理
 
-        memories = self.memory_store.search_memories(
-            query_text=qurey_text, top_k=30)  # 获取对话的相关记忆
+        memories = self.memory_store.search_memories(query_text=qurey_text, top_k=30)  # 获取对话的相关记忆
         self.logger.info(f"搜索记忆结果: {memories[:5]}")
         if memories is not None:
             for memory in memories[:10]:
@@ -142,15 +107,13 @@ class AIApi:
             tools=tools,
             # functions=Functions_list.return_weather_api(),
             # function_call="auto",
-        )
+        ) 
         if response.choices[0].finish_reason == "tool_calls":
             tool_call = response.choices[0].message.tool_calls[0]
-            message.append(response.choices[0].message)
-            
             if tool_call.function.name == "weather_api":
+                message.append(response.choices[0].message) # 加入工具调用消息
                 self.logger.info("调用天气API")
                 weather_info = weather_api()
-
                 content_json = {
                     "role": "tool",
                     "content": str(weather_info),
@@ -172,7 +135,7 @@ class AIApi:
         try:
             answer = ast.literal_eval(answer)
         except Exception as e:
-            answer = "我无法回答你的问题(｡･ω･｡)"
+            answer = ["我无法回答你的问题(｡･ω･｡)"]
             self.logger.error(f"AI回复错误: {answer}")
             self.logger.error(f"无法将AI回复解析为list数据: {answer}")
             self.logger.error(f"错误信息: {e}")
@@ -194,27 +157,24 @@ class AIApi:
         """
         # 使用AI判断消息重要性(0-5级)
         importance_prompt = f"""
-        你是一个可爱的二次元女友，名字叫小清，性格活泼开朗，有一个有趣的灵魂但有时会害羞。
+        {bot_personality.INFORMATION_ASSESS}
         
         请按以下规则评估消息重要性：
-        要记住一些重要的时间和事件，并考虑消息的urgencity(紧急程度)。
-        疑问句为不重要信息。
+        要记住一些重要的时间和事件，并考虑消息的重要性
         
         消息内容：{msg}
         评估标准：
-        1 - 一般
-        2 - 还行
-        3 - 重要
+        1-5:
+        1 - 一般重要
+        2 - 重要
+        3 - 很重
         4 - 非常重要
         5 - 极其重要
+        
         只需返回数字1-5"""
         importance = 1
         try:
-            client = OpenAI(
-                api_key=self.config["basic_settings"]['API_token'],
-                base_url="https://api.deepseek.com"
-            )
-            response = client.chat.completions.create(
+            response = self.client.chat.completions.create(
                 model="deepseek-chat",
                 messages=[{"role": "system", "content": GF_PROMPT},
                           {"role": "user", "content": importance_prompt}],
@@ -268,26 +228,18 @@ class AIApi:
         最后聊天时间：{last_time}
         当前时间：{datetime.now(self.bj_tz)}
         最近聊天内容：{msg[-30:]}
+
+        {bot_personality.PROACTIVE_JUDGEMENT}
         
-        判断标准：
-        1. 用户没有明确表示不想聊天
-        2. 最后聊天内容有可延续的话题
-        3. 当前不是用户通常的休息时间
-        4. 自己没有道晚安或别的类似再见等等一段时间的命令
-        只需返回true或false"""
+        """
         try:
-            client = OpenAI(
-                api_key=self.config["basic_settings"]['API_token'],
-                base_url="https://api.deepseek.com"
-            )
-            response = client.chat.completions.create(
+            response = self.client.chat.completions.create(
                 model="deepseek-chat",
                 messages=[{"role": "system", "content": GF_PROMPT},
                           {"role": "user", "content": prompt}],
                 temperature=0.1
             )
-            should_chat = response.choices[0].message.content.strip(
-            ).lower() == "true"
+            should_chat = response.choices[0].message.content.strip().lower() == "true"
             # print(f"主动聊天判断结果: {should_chat}")
             self.logger.info(f"主动聊天判断结果: {should_chat}")
             if should_chat:
@@ -301,17 +253,13 @@ class AIApi:
                 最后聊天时间：{last_time}
                 当前时间：{datetime.now(self.bj_tz)}
                 最近聊天记录：{msg[-30:]}
+
+                {bot_personality.PROACTIVE_INFORMATION}
                 
-                要求：
-                1. 使用可爱的语气和颜文字
-                2. 可以结合之前的聊天内容
-                3. 自然不做作
-                4. 可以是关心、分享或提问
-                5. 使用不同的话题，话题要有趣。
-                只需返回生成的开场白内容"""
+                """
 
                 try:
-                    topic_response = client.chat.completions.create(
+                    topic_response = self.client.chat.completions.create(
                         model="deepseek-chat",
                         messages=[{"role": "system", "content": GF_PROMPT}, {
                             "role": "user", "content": topic_prompt}],
@@ -333,3 +281,4 @@ class AIApi:
             return []
         except Exception as e:
             self.logger.error(f"主动聊天判断失败: {str(e)}")
+        return []

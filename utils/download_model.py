@@ -1,10 +1,16 @@
 import os
 from sentence_transformers import SentenceTransformer
+from config import env
 
-# 创建模型保存路径
-os.makedirs('./local_model', exist_ok=True)
 
-# 下载并保存模型
-model = SentenceTransformer('distilbert-base-nli-stsb-mean-tokens')
-model.save('./local_model')
-print("模型已成功下载到 ./local_model 目录")
+def download():
+    """
+    下载模型
+    """
+    # 创建模型保存路径
+    print(f"模型保存路径为 {env.MODEL_STORE_PATH}")
+    os.makedirs(env.MODEL_STORE_PATH, exist_ok=True)
+    # 下载并保存模型
+    model = SentenceTransformer(env.MODEL_CHOOSE)
+    model.save(env.MODEL_STORE_PATH)
+    print(f"模型已成功下载到 {env.MODEL_STORE_PATH} 目录")

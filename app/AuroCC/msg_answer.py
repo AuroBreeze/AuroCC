@@ -5,33 +5,28 @@ from datetime import datetime, timedelta
 from api.Logger_owner import Logger
 from api.Botapi import QQAPI_list
 from app.AuroCC.share_date import memory_store
-import yaml
 import random
 import asyncio
 from app.AuroCC.share_date import message_buffer
 from app.AuroCC.ai_api import AIApi
 from app.AuroCC.msg_process import MsgProcessScheduler
 import pytz
+from config import env
 
 class Answer_api:
     def __init__(self, websocket, message:dict):
-        self.logger = Logger()
+        self.logger = Logger("Answer_api")
         self.message = message
         self.websocket = websocket
         #self.user_id = str(message.get('user_id'))
         
-        self.bj_tz = pytz.timezone('Asia/Shanghai')
+        self.bj_tz = pytz.timezone(env.TIMEZONE)
         self.message_buffer = message_buffer  # 用户ID: {"parts": [], "last_time": timestamp}
         
         self.memory = memory_store  # 向量索引
         self.memory.load_indexes()  # 导入索引
         
-        try:
-            with open("_config.yml", 'r', encoding='utf-8') as f:
-                self.yml = yaml.load(f, Loader=yaml.FullLoader)
-                self.user_id = str(self.yml["basic_settings"]["QQbot_admin_account"])
-        except Exception as e:
-            self.logger.error(f"配置文件读取失败: {e}")
+        self.user_id = env.QQ_ADMIN
             
             
         
@@ -103,8 +98,8 @@ class Answer_api:
             # 检查是否需要主动聊天
             #await self.active_chat()
             asyncio.create_task(self.active_chat())
-            asyncio.create_task(MsgProcessScheduler(self.user_id).Start_scheduler())
-            asyncio.create_task(MsgProcessScheduler(self.user_id).Save_and_rebuild_indexs())
+            MsgProcessScheduler(self.user_id).Start_scheduler()
+            MsgProcessScheduler(self.user_id).Save_and_rebuild_indexs()
 
     def check_message(self,is_active:bool)->bool:
         if is_active:

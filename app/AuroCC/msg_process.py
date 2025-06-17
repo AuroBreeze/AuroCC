@@ -2,12 +2,13 @@ from datetime import datetime
 import pytz
 from app.AuroCC.share_date import memory_store
 from api.Logger_owner import Logger
+from config import env
 
 class MsgProcess:
     def __init__(self, user_id):
-        self.bj_tz = pytz.timezone('Asia/Shanghai')
+        self.bj_tz = pytz.timezone(env.TIMEZONE)
         self.memory_store = memory_store
-        self.logger = Logger()
+        self.logger = Logger("MsgProcess")
         pass
 
     def Extract_msg_center(self):
@@ -26,20 +27,18 @@ class MsgProcess:
 class MsgProcessScheduler:
     def __init__(self, user_id):
         self.msg_process = MsgProcess(user_id)
-        self.bj_tz = pytz.timezone('Asia/Shanghai')
+        self.bj_tz = pytz.timezone(env.TIMEZONE)
         
-    async def Start_scheduler(self):
+    def Start_scheduler(self):
         now = datetime.now(self.bj_tz)
         
-        if now.hour == 10 and now.minute==10:
-
+        if now.hour == 22 and now.minute==10:
             self.msg_process.Clear_memories_short()
 
-    
-    async def Save_and_rebuild_indexs(self):
+    def Save_and_rebuild_indexs(self):
         now = datetime.now(self.bj_tz)
         
-        if now.hour == 10 and now.minute == 30:
+        if now.hour == 22 and now.minute == 30:
             self.msg_process.Save_indexs_and_rebuild_indexs()
             
         
