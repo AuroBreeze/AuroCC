@@ -1,14 +1,14 @@
 # QQ setttings for development environment
-QQ_BOT  = 'your_qq_bot_id' # QQ Bot ID QQ机器人账号
-QQ_ADMIN = 'your_qq_admin_id' # QQ Admin ID QQ管理员账号
+QQ_BOT  = '' # QQ Bot ID QQ机器人账号
+QQ_ADMIN = '' # QQ Admin ID QQ管理员账号
 
 # ws settings for development environment
 WS_URL = "ws://napcat:3001"
 
 
 # KEY settings for development environment
-DEEPSEEK_API_KEY = 'your_deepseek_api_key' # DeepSeek API Key
-AMAP_KEY = 'your_amap_key' # 高德API
+DEEPSEEK_API_KEY = '' # DeepSeek API Key
+AMAP_KEY = '' # 高德API
 
 # memory_store_path settings for development environment
 DB_PATH = './store/memory_store/' # Database path 数据库保存位置
