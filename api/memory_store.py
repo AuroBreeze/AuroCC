@@ -8,7 +8,7 @@ import faiss
 import numpy as np
 from sentence_transformers import SentenceTransformer
 import pickle  # 新增导入
-from config import dev
+from config import env
 from utils.download_model import download
 
 
@@ -19,9 +19,9 @@ class MemoryStore:
 
         
         self.user_id = str(user_id)
-        self.short_term_db = Path(dev.MEMORY_STORE_PATH+f"user_memories_short_{user_id}.db")
-        self.long_term_db = Path(dev.MEMORY_STORE_PATH+f"user_memories_long_{user_id}.db")
-        self.bj_tz = pytz.timezone(dev.TIMEZONE)
+        self.short_term_db = Path(env.MEMORY_STORE_PATH+f"user_memories_short_{user_id}.db")
+        self.long_term_db = Path(env.MEMORY_STORE_PATH+f"user_memories_long_{user_id}.db")
+        self.bj_tz = pytz.timezone(env.TIMEZONE)
         self._init_dbs()
         self.logger = Logger()
         
@@ -30,11 +30,11 @@ class MemoryStore:
         # 改用支持中文更好的模型
         try:
             if not MemoryStore._model: # 减少重复加载模型
-                MemoryStore._model = SentenceTransformer(dev.MODEL_STORE_PATH) # 加载本地模型
+                MemoryStore._model = SentenceTransformer(env.MODEL_STORE_PATH) # 加载本地模型
         except Exception as e:
             self.logger.warning(f"加载模型失败: {str(e)}")
             download()  # 下载并加载模型
-            MemoryStore._model = SentenceTransformer(dev.MODEL_STORE_PATH) # 加载本地模型
+            MemoryStore._model = SentenceTransformer(env.MODEL_STORE_PATH) # 加载本地模型
 
         self.embedder = MemoryStore._model  # 新增模型属性
         self.dim = self.embedder.get_sentence_embedding_dimension()  # 与模型维度一致
@@ -42,9 +42,9 @@ class MemoryStore:
         self.long_term_index = faiss.IndexFlatL2(self.dim)
         self.id_mapping = {'short': {}, 'long': {}}  # FAISS ID -> 数据库ID
         
-        self.short_index_save_path = dev.INDEX_STORE_PATH+f"user_memories_short_{user_id}.index"
-        self.long_index_save_path = dev.INDEX_STORE_PATH+f"user_memories_long_{user_id}.index"
-        self.pkl_save_path = dev.INDEX_STORE_PATH+f"user_memories_{user_id}.pkl"
+        self.short_index_save_path = env.INDEX_STORE_PATH+f"user_memories_short_{user_id}.index"
+        self.long_index_save_path = env.INDEX_STORE_PATH+f"user_memories_long_{user_id}.index"
+        self.pkl_save_path = env.INDEX_STORE_PATH+f"user_memories_{user_id}.pkl"
         
         self.logger.info("MemoryStore init success")
         

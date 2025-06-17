@@ -6,7 +6,7 @@ import pytz
 from datetime import datetime
 import random
 import ast
-from config import dev
+from config import env
 
 
 GF_PROMPT = """你是一个可爱的二次元女友，名字叫小清，性格活泼开朗，有一个有趣的灵魂但有时会害羞。
@@ -58,7 +58,7 @@ class AIApi:
     def __init__(self):
         self.logger = Logger()
 
-        self.client = OpenAI(api_key=dev.DEEPSEEK_API_KEY,
+        self.client = OpenAI(api_key=env.DEEPSEEK_API_KEY,
                              base_url="https://api.deepseek.com")
 
         self.memory_store = memory_store  # 导入记忆数据库

@@ -2,11 +2,11 @@ from datetime import datetime
 import pytz
 from app.AuroCC.share_date import memory_store
 from api.Logger_owner import Logger
-from config import dev
+from config import env
 
 class MsgProcess:
     def __init__(self, user_id):
-        self.bj_tz = pytz.timezone(dev.TIMEZONE)
+        self.bj_tz = pytz.timezone(env.TIMEZONE)
         self.memory_store = memory_store
         self.logger = Logger()
         pass
@@ -27,7 +27,7 @@ class MsgProcess:
 class MsgProcessScheduler:
     def __init__(self, user_id):
         self.msg_process = MsgProcess(user_id)
-        self.bj_tz = pytz.timezone(dev.TIMEZONE)
+        self.bj_tz = pytz.timezone(env.TIMEZONE)
         
     async def Start_scheduler(self):
         now = datetime.now(self.bj_tz)

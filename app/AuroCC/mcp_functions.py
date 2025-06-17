@@ -1,6 +1,6 @@
 import requests
 import yaml
-from config import dev
+from config import env
 def weather_api()->dict:
     """
     获取曲阜的天气信息
@@ -9,7 +9,7 @@ def weather_api()->dict:
     url = "https://restapi.amap.com/v3/weather/weatherInfo"
     params = {
         "city": "370881",
-        "key": dev.AMAP_KEY
+        "key": env.AMAP_KEY
     }
     
     response = requests.get(url, params=params).json()

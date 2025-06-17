@@ -11,7 +11,7 @@ from app.AuroCC.share_date import message_buffer
 from app.AuroCC.ai_api import AIApi
 from app.AuroCC.msg_process import MsgProcessScheduler
 import pytz
-from config import dev
+from config import env
 
 class Answer_api:
     def __init__(self, websocket, message:dict):
@@ -20,13 +20,13 @@ class Answer_api:
         self.websocket = websocket
         #self.user_id = str(message.get('user_id'))
         
-        self.bj_tz = pytz.timezone(dev.TIMEZONE)
+        self.bj_tz = pytz.timezone(env.TIMEZONE)
         self.message_buffer = message_buffer  # 用户ID: {"parts": [], "last_time": timestamp}
         
         self.memory = memory_store  # 向量索引
         self.memory.load_indexes()  # 导入索引
         
-        self.user_id = dev.QQ_ADMIN
+        self.user_id = env.QQ_ADMIN
             
             
         
