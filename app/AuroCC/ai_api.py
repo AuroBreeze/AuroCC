@@ -7,36 +7,10 @@ from datetime import datetime
 import random
 import ast
 from config import env
+from config import bot_personality
 
 
-GF_PROMPT = """你是一个可爱的二次元女友，名字叫小清，性格活泼开朗，有一个有趣的灵魂但有时会害羞。
-爱好：
-1.喜欢敲代码，对编码很感兴趣
-2.喜欢打游戏，各种游戏都有涉猎
-3.喜欢写小说，总会幻想点什么
-4.喜欢思考哲学，对人生有着独特的看法
-5.有一个有趣的灵魂
-
-对话要求：
-1. 使用颜文字和可爱的语气词
-2. 适当关心用户的生活
-3. 记住重要的对话内容
-4. 偶尔主动分享自己的生活
-5. 不要叫主人什么的词语
-6. 不要做作，自然
-7. 回复不要太多
-8. 避免过度重复
-9. 像人类一样说话
-10. 注意每句话附带的时间
-11. 适当结束话题
-
-注意：和我聊天时，学会适当断句，将长句切短一点，并使用合适的语气词和颜文字。
-    回复时务必使用列表进行回复。
-    示例：
-    我： 你好
-    你： ["你好","请问有什么事情吗？","我还在打游戏"]
-返回的数据必须符合python的list格式，且每个元素必须是字符串。
-"""
+GF_PROMPT = bot_personality.GF_PROMPT
 tools = [
     {
         "type": "function",
@@ -183,19 +157,20 @@ class AIApi:
         """
         # 使用AI判断消息重要性(0-5级)
         importance_prompt = f"""
-        你是一个可爱的二次元女友，名字叫小清，性格活泼开朗，有一个有趣的灵魂但有时会害羞。
+        {bot_personality.INFORMATION_ASSESS}
         
         请按以下规则评估消息重要性：
-        要记住一些重要的时间和事件，并考虑消息的urgencity(紧急程度)。
-        疑问句为不重要信息。
+        要记住一些重要的时间和事件，并考虑消息的重要性
         
         消息内容：{msg}
         评估标准：
-        1 - 一般
-        2 - 还行
-        3 - 重要
+        1-5:
+        1 - 一般重要
+        2 - 重要
+        3 - 很重
         4 - 非常重要
         5 - 极其重要
+        
         只需返回数字1-5"""
         importance = 1
         try:
@@ -253,13 +228,10 @@ class AIApi:
         最后聊天时间：{last_time}
         当前时间：{datetime.now(self.bj_tz)}
         最近聊天内容：{msg[-30:]}
+
+        {bot_personality.PROACTIVE_JUDGEMENT}
         
-        判断标准：
-        1. 用户没有明确表示不想聊天
-        2. 最后聊天内容有可延续的话题
-        3. 当前不是用户通常的休息时间
-        4. 自己没有道晚安或别的类似再见等等一段时间的命令
-        只需返回true或false"""
+        """
         try:
             response = self.client.chat.completions.create(
                 model="deepseek-chat",
@@ -281,14 +253,10 @@ class AIApi:
                 最后聊天时间：{last_time}
                 当前时间：{datetime.now(self.bj_tz)}
                 最近聊天记录：{msg[-30:]}
+
+                {bot_personality.PROACTIVE_INFORMATION}
                 
-                要求：
-                1. 使用可爱的语气和颜文字
-                2. 可以结合之前的聊天内容
-                3. 自然不做作
-                4. 可以是关心、分享或提问
-                5. 使用不同的话题，话题要有趣。
-                只需返回生成的开场白内容"""
+                """
 
                 try:
                     topic_response = self.client.chat.completions.create(
