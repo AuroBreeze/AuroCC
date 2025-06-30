@@ -188,9 +188,11 @@ class MemoryStore:
         table_name = f"user_{self.user_id}_{db_type}_memories"
         cursor.execute(f"SELECT * FROM {table_name} WHERE id=?", (db_id,))
         result = cursor.fetchone()
+        print(result)
         return {
         'id': result[0],
         'timestamp': result[1],
+        'memory_type': result[2],
         'content': json.loads(result[3]),
         'importance': result[4]
         }

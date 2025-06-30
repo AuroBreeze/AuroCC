@@ -70,7 +70,8 @@ class AIApi:
             self.logger.error("错误信息: " + str(e))
             qurey_text = "" # 未定义情况的处理
 
-        memories = self.memory_store.search_memories(query_text=qurey_text, top_k=30)  # 获取对话的相关记忆
+        # TODO : 要动态调整top_k的数值,数据少的时候,会因为索引过少而搜索不到结果,导致报错
+        memories = self.memory_store.search_memories(query_text=qurey_text, top_k=5)  # 获取对话的相关记忆
         self.logger.info(f"搜索记忆结果: {memories[:5]}")
         if memories is not None:
             for memory in memories[:10]:
