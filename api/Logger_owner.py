@@ -1,7 +1,7 @@
 import colorlog
 from datetime import datetime
 import pytz
-from config import basic
+from config.env import TIMEZONE
 
 class Logger:
     def __init__(self, log_name='root'):
@@ -15,7 +15,7 @@ class Logger:
             reset=True
         )
         # 获取UTC时区
-        self.tz = basic.TIMEZONE
+        self.tz = TIMEZONE
 
     def _get_time(self):
         # 获取当前上海时间
