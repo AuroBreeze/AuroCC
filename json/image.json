@@ -1,0 +1,33 @@
+{
+    "self_id": 2712065523,
+    "user_id": 1732373074,
+    "time": 1751251066,
+    "message_id": 889321177,
+    "message_seq": 889321177,
+    "real_id": 889321177,
+    "real_seq": "9109",
+    "message_type": "private",
+    "sender": {
+        "user_id": 1732373074,
+        "nickname": "C-C（x_x；）",
+        "card": ""
+    },
+    "raw_message": "[CQ:image,summary=&#91;动画表情&#93;,file=34BFACBAB3CB8A828519551B45A17F0B.jpg,sub_type=1,url=https://multimedia.nt.qq.com.cn/download?appid=1406&amp;fileid=EhTLd7Kfwtr8ArYustcIEOLGj7GYoxiIViD-CijvtfjNjpiOAzIEcHJvZFoQBroXFAMA2Gd4O9hrnib-hXoC_GA&amp;rkey=CAQSMMeluFwkZxqZSCKxl-yv0WQ6WZwVZUReArf5-p5qERLtQGM-roUZhjYe1UkdHBZm7g,file_size=11016]",
+    "font": 14,
+    "sub_type": "friend",
+    "message": [
+        {
+            "type": "image",
+            "data": {
+                "summary": "[动画表情]",
+                "file": "34BFACBAB3CB8A828519551B45A17F0B.jpg",
+                "sub_type": 1,
+                "url": "https://multimedia.nt.qq.com.cn/download?appid=1406&fileid=EhTLd7Kfwtr8ArYustcIEOLGj7GYoxiIViD-CijvtfjNjpiOAzIEcHJvZFoQBroXFAMA2Gd4O9hrnib-hXoC_GA&rkey=CAQSMMeluFwkZxqZSCKxl-yv0WQ6WZwVZUReArf5-p5qERLtQGM-roUZhjYe1UkdHBZm7g",
+                "file_size": "11016"
+            }
+        }
+    ],
+    "message_format": "array",
+    "post_type": "message",
+    "target_id": 1732373074
+}
