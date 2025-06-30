@@ -3,16 +3,42 @@ import pytz
 from app.AuroCC.share_date import memory_store
 from api.Logger_owner import Logger
 from config import env
+from config import bot_personality
+from openai import OpenAI
 
-class MsgProcess:
+class TimingProcess:
     def __init__(self, user_id):
         self.bj_tz = pytz.timezone(env.TIMEZONE)
         self.memory_store = memory_store
-        self.logger = Logger("MsgProcess")
-        pass
 
-    def Extract_msg_center(self):
-        # Extract msg center from memory store
+        self.client = OpenAI(api_key=env.DEEPSEEK_API_KEY,
+                             base_url="https://api.deepseek.com")
+        
+        self.logger = Logger("TimingProcess")
+    
+    def Get_daily_schedule(self):
+        self.logger.info("开始获取日程")
+
+        GF_PROMPT = bot_personality.GF_PROMPT
+        prompt_bot = {"role": "system", "content": GF_PROMPT}
+        mess = "根据上述的提示词,帮我为虚拟的角色生成一个虚拟的今日日程,劳逸结合的日程,仅返回日程"
+        prompt_user = {"role": "user", "content": mess}
+
+        messages = [prompt_bot, prompt_user]
+        try:
+            response = self.client.chat.completions.create(
+            model="deepseek-chat",
+            temperature=0.7,
+            messages=messages,
+            max_tokens=256,
+        )
+            answer = str(response.choices[0].message.content.strip())
+
+            self.logger.info("虚拟日程创建成功")
+            return answer
+        except Exception as e:
+            self.logger.error(e)
+
         pass
 
     def Save_indexs_and_rebuild_indexs(self):
@@ -26,7 +52,7 @@ class MsgProcess:
 
 class MsgProcessScheduler:
     def __init__(self, user_id):
-        self.msg_process = MsgProcess(user_id)
+        self.msg_process = TimingProcess(user_id)
         self.bj_tz = pytz.timezone(env.TIMEZONE)
         
     def Start_scheduler(self):

@@ -74,44 +74,73 @@
 # print(type(json_test),json_test)
 # print(json_test["tes"])
 
-import sqlite3
-from pathlib import Path
+# import sqlite3
+# from pathlib import Path
+# from config import env
+
+# term_db = Path(env.MEMORY_STORE_PATH+f"memories.db")
+
+# conn = sqlite3.connect(term_db)
+# cursor = conn.cursor()
+# cursor.execute("""CREATE TABLE IF NOT EXISTS memories (
+#     id INTEGER PRIMARY KEY AUTOINCREMENT,
+#     user_id TEXT,
+#     memory_type TEXT,
+#     content TEXT,
+#     timestamp TEXT,
+#     importance REAL
+# )""")
+# cursor.execute("""CREATE TABLE IF NOT EXISTS memories_short (
+#                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+#                user_id TEXT,
+#                 memory_type TEXT,
+#                 content TEXT,
+#                 timestamp TEXT,
+#                 importance REAL,
+#                 last_reviewed TEXT,
+#                 next_review TEXT
+# )""")
+
+# cursor.execute("""CREATE TABLE IF NOT EXISTS memories_long (
+#                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+#                 user_id TEXT,
+#                 memory_type TEXT,
+#                 content TEXT,
+#                 timestamp TEXT,
+#                 importance REAL,
+#                 last_reviewed TEXT,
+#                 next_review TEXT
+# )""")
+
+# conn.commit()
+# conn.close()
+
+
+    
+from config import bot_personality
 from config import env
+from openai import OpenAI
 
-term_db = Path(env.MEMORY_STORE_PATH+f"memories.db")
+client = OpenAI(api_key=env.DEEPSEEK_API_KEY,
+                             base_url="https://api.deepseek.com")
+        
+GF_PROMPT = bot_personality.GF_PROMPT
+prompt_bot = {"role": "system", "content": GF_PROMPT}
+mess = "根据上述的提示词,帮我为虚拟的角色生成一个虚拟的今日日程,劳逸结合的日程,仅返回日程"
+prompt_user = {"role": "user", "content": mess}
 
-conn = sqlite3.connect(term_db)
-cursor = conn.cursor()
-cursor.execute("""CREATE TABLE IF NOT EXISTS memories (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id TEXT,
-    memory_type TEXT,
-    content TEXT,
-    timestamp TEXT,
-    importance REAL
-)""")
-cursor.execute("""CREATE TABLE IF NOT EXISTS memories_short (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-               user_id TEXT,
-                memory_type TEXT,
-                content TEXT,
-                timestamp TEXT,
-                importance REAL,
-                last_reviewed TEXT,
-                next_review TEXT
-)""")
+messages = [prompt_bot, prompt_user]
+try:
+    response = client.chat.completions.create(
+            model="deepseek-chat",
+            temperature=0.7,
+            messages=messages,
+            max_tokens=256,
+        )
+    answer = str(response.choices[0].message.content.strip())
+    print(answer)
 
-cursor.execute("""CREATE TABLE IF NOT EXISTS memories_long (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id TEXT,
-                memory_type TEXT,
-                content TEXT,
-                timestamp TEXT,
-                importance REAL,
-                last_reviewed TEXT,
-                next_review TEXT
-)""")
-
-conn.commit()
-conn.close()
-
+    
+except Exception as e:
+    print(e)
+    

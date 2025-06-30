@@ -1,7 +1,7 @@
 import colorlog
 from datetime import datetime
 import pytz
-from config.env import TIMEZONE
+from config.environment.basic import TIMEZONE
 
 class Logger:
     def __init__(self, log_name='root'):
