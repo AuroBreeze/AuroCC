@@ -2,7 +2,7 @@ import sqlite3
 import json
 from pathlib import Path
 from datetime import datetime, timedelta
-from .Logger_owner import Logger
+from ..Logger_owner import Logger
 import pytz
 import faiss
 import numpy as np

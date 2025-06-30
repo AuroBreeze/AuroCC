@@ -1,4 +1,4 @@
-from api.memory_store import MemoryStore
+from api.memory_api.memory_store import MemoryStore
 from api.Logger_owner import Logger
 import sqlite3
 import json
