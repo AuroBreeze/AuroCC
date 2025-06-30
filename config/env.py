@@ -13,7 +13,7 @@ try:
         DEEPSEEK_API_KEY = DEEPSEEK_API_KEY if DEEPSEEK_API_KEY else config['basic_settings']['API_token']
         AMAP_KEY = AMAP_KEY if AMAP_KEY else config['basic_settings']['Weather_api_key']
 except Exception as e:
-    logs.error(f"Failed to load config from _config.yml  wiht Error: {e}")
+    logs.error(f"Failed to load config from _config.yml with Error: {e}")
     
 if current_env == 'dev':
     WS_URL = "ws://127.0.0.1:3001"
