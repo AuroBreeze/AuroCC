@@ -3,20 +3,22 @@ import pytz
 from api.Logger_owner import Logger
 from config import env
 from api.Botapi import QQAPI_list
+from . import share_date
 import json
 import threading
 import schedule
 import asyncio
 import time
+from app.Learn_clock.share_date import clock_records
 
 class Clock_learn():
     def __init__(self, websocket, message:dict):
         self.logger = Logger("Clock_learn")
         self.bj_tz = pytz.timezone(env.TIMEZONE)
-        self.user_id = env.QQ_ADMIN
+        self.user_id = None
         self.message = message
         self.websocket = websocket
-        self.clock_records = {}  # 存储打卡记录 {user_id: {task_name: [{"start": datetime, "end": datetime}]}}
+        self.logger.debug(f"初始化Clock_learn, 当前打卡记录: {json.dumps(share_date.clock_records, default=str)}")
         
         # 启动定时任务线程
         self.scheduler_thread = threading.Thread(target=self._run_scheduler, daemon=True)
@@ -33,8 +35,9 @@ class Clock_learn():
         """每天凌晨1点重置打卡记录"""
         self.logger.info("正在重置所有打卡记录...")
         reset_time = datetime.now(self.bj_tz)
-        self.clock_records = {}
+        share_date.clock_records = {}
         self.logger.info("打卡记录已重置")
+        self.logger.debug(f"重置后打卡记录: {json.dumps(share_date.clock_records, default=str)}")
         
         # 发送重置通知到所有群组
         if hasattr(self, 'websocket'):
@@ -57,6 +60,11 @@ class Clock_learn():
         msg = self.message.get("raw_message", "").strip()
         if not msg:
             return
+
+        self.user_id = self.message.get("user_id")
+        # 调试日志
+        self.logger.error(f"当前用户ID: {self.user_id}")
+        self.logger.error(f"当前打卡记录: {json.dumps(share_date.clock_records, default=str)}")
         
         # 处理开始打卡
         if msg == "开始":
@@ -70,19 +78,18 @@ class Clock_learn():
                 
             task_name = msg[3:].strip()
             
-            if self.user_id not in self.clock_records:
-                self.clock_records[self.user_id] = {}
+            if self.user_id not in share_date.clock_records:
+                share_date.clock_records[self.user_id] = {}
+            if task_name not in share_date.clock_records[self.user_id]:
+                share_date.clock_records[self.user_id][task_name] = []
             
-            if self.user_id not in self.clock_records:
-                self.clock_records[self.user_id] = {}
-            if task_name not in self.clock_records[self.user_id]:
-                self.clock_records[self.user_id][task_name] = []
+            print(share_date.clock_records)
             
             # 检查是否有未结束的打卡
-            if any(record["end"] is None for record in self.clock_records[self.user_id][task_name]):
+            if any(record["end"] is None for record in share_date.clock_records[self.user_id][task_name]):
                 await self.send_message(f"您有未结束的'{task_name}'打卡，请先结束当前打卡")
             else:
-                self.clock_records[self.user_id][task_name].append({
+                share_date.clock_records[self.user_id][task_name].append({
                     "start": datetime.now(self.bj_tz),
                     "end": None
                 })
@@ -101,6 +108,50 @@ class Clock_learn():
             await self.send_message("打卡格式不正确，请使用：结束 [任务名称]\n例如：结束 单词")
             return
             
+        elif msg == "打卡查询":
+            if self.user_id not in share_date.clock_records or not share_date.clock_records[self.user_id]:
+                await self.send_message("今天还没有任何打卡记录")
+                return
+                
+            response = "📊 今日打卡统计:\n"
+            total_tasks = 0
+            total_duration_all = timedelta()
+            
+            for task_name, records in share_date.clock_records[self.user_id].items():
+                total_tasks += 1
+                task_duration = timedelta()
+                response += f"\n📌 项目: {task_name}\n"
+                
+                for i, record in enumerate(records, 1):
+                    if record["end"]:
+                        duration = record["end"] - record["start"]
+                        task_duration += duration
+                        hours, remainder = divmod(duration.total_seconds(), 3600)
+                        minutes, seconds = divmod(remainder, 60)
+                        response += (
+                            f"  {i}. ⏱️ {record['start'].strftime('%H:%M:%S')} - "
+                            f"{record['end'].strftime('%H:%M:%S')} "
+                            f"({int(hours)}时{int(minutes)}分{int(seconds)}秒)\n"
+                        )
+                
+                total_hours, total_remainder = divmod(task_duration.total_seconds(), 3600)
+                total_minutes, total_seconds = divmod(total_remainder, 60)
+                response += (
+                    f"  🔢 次数: {len(records)}次\n"
+                    f"  ⏳ 累计: {int(total_hours)}时{int(total_minutes)}分{int(total_seconds)}秒\n"
+                )
+                total_duration_all += task_duration
+            
+            total_h, total_r = divmod(total_duration_all.total_seconds(), 3600)
+            total_m, total_s = divmod(total_r, 60)
+            response += (
+                f"\n📈 今日总计:\n"
+                f"  📌 项目数: {total_tasks}个\n"
+                f"  ⏳ 总时长: {int(total_h)}时{int(total_m)}分{int(total_s)}秒"
+            )
+            
+            await self.send_message(response)
+            
         elif msg.startswith("结束"):
             if len(msg) <= 3 or not msg[3:].strip():
                 await self.send_message("请指定要结束的打卡任务名称，格式为：结束 [任务名称]\n例如：结束 单词")
@@ -108,21 +159,49 @@ class Clock_learn():
                 
             task_name = msg[3:].strip()
             
-            if self.user_id not in self.clock_records or task_name not in self.clock_records[self.user_id]:
-                await self.send_message(f"⚠️ 没有找到'{task_name}'的打卡记录\n请确认任务名称是否正确")
+            if self.user_id not in share_date.clock_records:
+                await self.send_message(f"⚠️ 没有找到任何打卡记录")
                 return
             
-            records = self.clock_records[self.user_id][task_name]
-            # 找到最后一个未结束的记录
-            active_record = None
-            for record in reversed(records):
-                if record["end"] is None:
-                    active_record = record
-                    break
-            
-            if not active_record:
-                await self.send_message(f"没有找到未结束的'{task_name}'打卡记录")
-                return
+            # 如果指定了任务名称
+            if task_name:
+                if task_name not in share_date.clock_records[self.user_id]:
+                    await self.send_message(f"⚠️ 没有找到'{task_name}'的打卡记录\n请确认任务名称是否正确")
+                    return
+                
+                records = share_date.clock_records[self.user_id][task_name]
+                # 找到最后一个未结束的记录
+                active_record = None
+                for record in reversed(records):
+                    if record["end"] is None:
+                        active_record = record
+                        break
+                
+                if not active_record:
+                    await self.send_message(f"没有找到未结束的'{task_name}'打卡记录")
+                    return
+            else:
+                # 如果没有指定任务名称，查找所有未结束的打卡
+                active_records = []
+                for name, records in share_date.clock_records[self.user_id].items():
+                    for record in reversed(records):
+                        if record["end"] is None:
+                            active_records.append((name, record))
+                            break
+                
+                if not active_records:
+                    await self.send_message("没有找到任何未结束的打卡记录")
+                    return
+                elif len(active_records) > 1:
+                    task_list = "\n".join([f"- {name}" for name, _ in active_records])
+                    await self.send_message(
+                        f"⚠️ 您有多个未结束的打卡任务，请指定要结束的任务名称:\n"
+                        f"{task_list}\n"
+                        f"格式: 结束 [任务名称]"
+                    )
+                    return
+                
+                task_name, active_record = active_records[0]
             
             active_record["end"] = datetime.now(self.bj_tz)
             duration = active_record["end"] - active_record["start"]
