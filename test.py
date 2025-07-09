@@ -117,30 +117,72 @@
 
 
     
-from config import bot_personality
-from config import env
-from openai import OpenAI
+# from config import bot_personality
+# from config import env
+# from openai import OpenAI
 
-client = OpenAI(api_key=env.DEEPSEEK_API_KEY,
-                             base_url="https://api.deepseek.com")
+# client = OpenAI(api_key=env.DEEPSEEK_API_KEY,
+#                              base_url="https://api.deepseek.com")
         
-GF_PROMPT = bot_personality.GF_PROMPT
-prompt_bot = {"role": "system", "content": GF_PROMPT}
-mess = "根据上述的提示词,帮我为虚拟的角色生成一个虚拟的今日日程,劳逸结合的日程,仅返回日程"
-prompt_user = {"role": "user", "content": mess}
+# GF_PROMPT = bot_personality.GF_PROMPT
+# prompt_bot = {"role": "system", "content": GF_PROMPT}
+# mess = "根据上述的提示词,帮我为虚拟的角色生成一个虚拟的今日日程,劳逸结合的日程,仅返回日程"
+# prompt_user = {"role": "user", "content": mess}
 
-messages = [prompt_bot, prompt_user]
+# messages = [prompt_bot, prompt_user]
+# try:
+#     response = client.chat.completions.create(
+#             model="deepseek-chat",
+#             temperature=0.7,
+#             messages=messages,
+#             max_tokens=256,
+#         )
+#     answer = str(response.choices[0].message.content.strip())
+#     print(answer)
+
+    
+# except Exception as e:
+#     print(e)
+
+import websockets
+import asyncio
 try:
-    response = client.chat.completions.create(
-            model="deepseek-chat",
-            temperature=0.7,
-            messages=messages,
-            max_tokens=256,
-        )
-    answer = str(response.choices[0].message.content.strip())
-    print(answer)
+    with websockets.connect("ws://127.0.0.1:3001") as websocket:
 
-    
+                # from app.AuroCC.active_message import ActiveMessageHandler
+                # active_handler = ActiveMessageHandler(websocket)
+                
+        for message in websocket:
+            print(message)
+                    
+                    # # 如果是心跳消息，检查是否需要主动发送消息
+                    # if isinstance(message, dict) and message.get("type") == "heartbeat":
+                    #     user_id = message.get("user_id")
+                    #     if user_id:
+                    #         await active_handler.check_and_send_message(user_id)
+
 except Exception as e:
-    print(e)
-    
+    pass
+
+import http.client
+import json
+
+conn = http.client.HTTPSConnection("")
+payload = json.dumps({
+   "user_id": "1732373074",
+   "message": [
+      {
+         "type": "text",
+         "data": {
+            "text": "napcat"
+         }
+      }
+   ]
+})
+headers = {
+   'Content-Type': 'application/json'
+}
+conn.request("POST", "/send_private_msg", payload, headers)
+res = conn.getresponse()
+data = res.read()
+print(data.decode("utf-8")) 
