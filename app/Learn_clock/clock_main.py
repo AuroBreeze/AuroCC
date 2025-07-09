@@ -15,6 +15,8 @@ class Clock_learn():
         self.clock_records = {}  # 存储打卡记录 {user_id: {task_name: {"start": datetime, "end": datetime}}}
     
     async def handle_clock(self):
+        if self.message.get("message_type") != "group":
+            return
         msg = self.message.get("raw_message", "").strip()
         if not msg:
             return
