@@ -34,6 +34,20 @@ class QQAPI_list:
         }
         await self.websocket.send(json.dumps(json_message))
         self.Logger.info("发送消息:%s,接收者:%s"%(message,user_id))
-        await asyncio.sleep(3)
-
+        await asyncio.sleep(2)
+    async def send_group_message(self,group_id,message):
+        json_message = {
+   "group_id": "123456",
+   "message": [
+      {
+         "type": "text",
+         "data": {
+            "text": "napcat"
+         }
+      }
+   ]
+}
+        await self.websocket.send(json.dumps(json_message))
+        self.Logger.info("发送群消息:%s,群号:%s"%(message,group_id))
+        await asyncio.sleep(1.5)
 
