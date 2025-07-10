@@ -19,6 +19,8 @@ class Store_db:
         """获取数据库连接"""
         if self.conn is None:
             self.conn = sqlite3.connect(self.db_path)
+            # 启用外键约束
+            self.conn.execute("PRAGMA foreign_keys = ON")
             self._init_dbs()
         return self.conn
 
@@ -43,7 +45,8 @@ class Store_db:
             level INTEGER NOT NULL,  -- 权限级别(1=最高,2=第二级,3=最低)
             parent_id TEXT,         -- 上级授权人
             create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (group_id) REFERENCES group_permissions(group_id) ON DELETE CASCADE
+            FOREIGN KEY (group_id) REFERENCES group_permissions(group_id) ON DELETE CASCADE,
+            UNIQUE (group_id, user_id)  -- 新增组合唯一约束
         )
         """)
         
@@ -259,6 +262,40 @@ class Store_db:
         except Exception as e:
             self.logger.error(f"检查用户权限失败: {e}")
             return False
+    
+    def remove_authorize_group(self,group_id: str) -> tuple[bool, str]:
+        """
+        删除授权群（先检查是否存在）
+
+        :param group_id: 群号
+        :return: (是否成功, 失败原因/None)
+        """
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            
+            # 先检查群组是否存在
+            cursor.execute("""
+            SELECT COUNT(*) FROM group_permissions 
+            WHERE group_id = ?
+            """, (group_id,))
+            
+            if cursor.fetchone()[0] == 0:
+                self.logger.warning(f"群组 {group_id} 不存在于群组授权中")
+                return False, f"群组 {group_id} 不存在于群组授权中"
+                
+            # 存在则删除
+            cursor.execute("""
+            DELETE FROM group_permissions
+            WHERE group_id = ?
+            """, (group_id,))
+
+            conn.commit()
+            self.logger.info(f"删除授权群 {group_id} 成功")
+            return True, None
+        except Exception as e:
+            self.logger.error(f"删除授权群 {group_id} 失败: {str(e)}")
+            return False, str(e)
 
     def can_manage_user(self, group_id: str, manager_id: str, target_user_id: str):
         """
