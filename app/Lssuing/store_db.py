@@ -49,7 +49,7 @@ class Store_db:
         
         # 群组授权管理 
         cursor.execute("""
-        CREATE TABLE IF NOT EXISTS user_authorizations (
+        CREATE TABLE IF NOT EXISTS group_information (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             group_id TEXT NOT NULL,
             user_id TEXT NOT NULL,  -- 被授权用户
@@ -64,17 +64,17 @@ class Store_db:
         # 创建索引
         cursor.execute("""
         CREATE INDEX IF NOT EXISTS idx_user_auth_group 
-        ON user_authorizations(group_id)
+        ON group_information(group_id)
         """)
         cursor.execute("""
         CREATE INDEX IF NOT EXISTS idx_user_auth_user 
-        ON user_authorizations(user_id)
+        ON group_information(user_id)
         """)
         
         # 创建索引
         cursor.execute("""
         CREATE INDEX IF NOT EXISTS idx_user_auth_time 
-        ON user_authorizations(start_time, end_time)
+        ON group_information(start_time, end_time)
         """)
 
         self.conn.commit()
@@ -143,28 +143,27 @@ class Store_db:
             
             # 检查记录是否存在
             cursor.execute("""
-            SELECT COUNT(*) FROM user_authorizations 
+            SELECT COUNT(*) FROM group_information 
             WHERE group_id=? AND user_id=?
             """, (group_id, user_id))
             
             if cursor.fetchone()[0] > 0:
                 # 存在则更新
                 cursor.execute("""
-                UPDATE user_authorizations 
+                UPDATE group_information 
                 SET start_time=?, end_time=?, features=?
                 WHERE group_id=? AND user_id=?
                 """, (start_time, end_time, features, group_id, user_id))
             else:
                 # 不存在则插入
                 cursor.execute("""
-                INSERT INTO user_authorizations (group_id, user_id, start_time, end_time, features)
+                INSERT INTO group_information (group_id, user_id, start_time, end_time, features)
                 VALUES (?, ?, ?, ?, ?)
                 """, (group_id, user_id, start_time, end_time, features))
             
             conn.commit()
-            return True, None
+            return True, f"群组{group_id}授权成功,获权用户{user_id}"
         except Exception as e:
-            conn.rollback()
             msg = "群组授权失败"
             self.logger.error(f"群组授权失败: {e}")
             return False, msg
@@ -331,7 +330,7 @@ class Store_db:
             
             # 删除授权记录
             cursor.execute("""
-            DELETE FROM user_authorizations 
+            DELETE FROM group_information 
             WHERE group_id = ? AND user_id = ?
             """, (group_id, target_user_id))
             
@@ -370,16 +369,13 @@ class Store_db:
             cursor.execute("""
             SELECT p.*, a.start_time, a.end_time, a.features 
             FROM user_permissions p
-            JOIN user_authorizations a ON p.group_id = a.group_id AND p.user_id = a.user_id
+            JOIN group_information a ON p.group_id = a.group_id AND p.user_id = a.user_id
             WHERE p.group_id = ? AND datetime('now') BETWEEN a.start_time AND a.end_time
             """, (group_id,))
             return cursor.fetchall(), ""
         except Exception as e:
             self.logger.error(f"列出群组用户失败: {e}")
             return [], str(e)
-        finally:
-            if self.conn:
-                self.conn.close()
 
     def get_manageable_users(self, group_id: str, manager_id: str) -> tuple[list, str]:
         """获取用户可以管理的用户列表
@@ -408,14 +404,14 @@ class Store_db:
                 cursor.execute("""
                 SELECT p.user_id, p.level, a.start_time, a.end_time, a.features
                 FROM user_permissions p
-                JOIN user_authorizations a ON p.group_id = a.group_id AND p.user_id = a.user_id
+                JOIN group_information a ON p.group_id = a.group_id AND p.user_id = a.user_id
                 WHERE p.group_id = ? AND p.level IN (2, 3)
                 """, (group_id,))
             else:  # 群组管理员(2级)只能管理3级
                 cursor.execute("""
                 SELECT p.user_id, p.level, a.start_time, a.end_time, a.features
                 FROM user_permissions p
-                JOIN user_authorizations a ON p.group_id = a.group_id AND p.user_id = a.user_id
+                JOIN group_information a ON p.group_id = a.group_id AND p.user_id = a.user_id
                 WHERE p.group_id = ? AND p.level = 3
                 """, (group_id,))
                 
@@ -423,9 +419,6 @@ class Store_db:
         except Exception as e:
             self.logger.error(f"获取可管理用户失败: {e}")
             return [], str(e)
-        finally:
-            if self.conn:
-                self.conn.close()
         
     def promote_to_group_admin(self, group_id: str, admin_id: str, user_id: str) -> tuple[bool, str]:
         """将用户提升为群组管理员(2级权限)
@@ -454,11 +447,7 @@ class Store_db:
             return True, None
         except Exception as e:
             self.logger.error(f"提升用户权限失败: {e}")
-            self.conn.rollback()
             return False, str(e)
-        finally:
-            if self.conn:
-                self.conn.close()
 
     def get_user_permission_level(self, group_id: str, user_id: str) -> tuple[int, str]:
         """
@@ -481,9 +470,7 @@ class Store_db:
         except Exception as e:
             self.logger.error(f"查询用户权限等级失败: {e}")
             return -1, str(e)
-        finally:
-            if self.conn:
-                self.conn.close()
+
 
     def __str__(self):
         return "create database for admin and user"
