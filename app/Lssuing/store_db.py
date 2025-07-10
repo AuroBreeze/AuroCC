@@ -76,7 +76,14 @@ class Store_db:
 
     def create_group_permission(self, group_id: str, owner_id: str, parent_id:str, level:int = 2) -> bool:
         """
-        创建或更新群组权限(2级权限)
+        授权群权限,创建或更新群组权限,并为user用户授予2级权限
+        此为1级权限用户功能
+
+        :param group_id: 群组ID
+        :param owner_id: 群组所有者ID
+        :param parent_id: 上级授权人ID
+        :param level: 权限级别(1=最高,2=第二级,3=最低)
+        :return: 成功返回True，失败返回False
         """
         try:
             cursor = self.conn.cursor()
@@ -87,13 +94,6 @@ class Store_db:
             WHERE group_id = ?
             """, (group_id,))
             group_exists = cursor.fetchone()[0] > 0
-            
-            # 检查用户权限是否存在
-            cursor.execute("""
-            SELECT COUNT(*) FROM user_permissions 
-            WHERE group_id = ? AND user_id = ?
-            """, (group_id, owner_id))
-            user_exists = cursor.fetchone()[0] > 0
             
             # 创建或更新群组权限
             if group_exists:
@@ -127,6 +127,13 @@ class Store_db:
 
         """
         群组授权管理，群组详细授权
+
+        :param group_id: 群组ID
+        :param user_id: 被授权用户ID
+        :param start_time: 授权开始时间
+        :param end_time: 授权结束时间
+        :param features: 授权功能JSON格式字符串
+        :return: 成功返回True，失败返回False
         """
         cursor = self.conn.cursor()
         cursor.execute("""
@@ -139,7 +146,13 @@ class Store_db:
     def add_user_authorization(self, group_id: str, user_id: str, level: int, 
                              parent_id: str) -> tuple[bool, str]:
         """
-        添加用户授权
+        添加用户权限
+
+        :param group_id: 群组ID
+        :param user_id: 用户ID
+        :param level: 权限级别(1=最高,2=第二级,3=最低)
+        :param parent_id: 上级授权人ID
+        :return: 成功返回True，失败返回False
         """
         try:
             # 检查父用户权限等级
@@ -148,7 +161,16 @@ class Store_db:
                 self.logger.error(f"用户{parent_id}没有2级权限")
                 return False,msg
 
+            # 新增：验证权限等级必须比授权者低一级
             cursor = self.conn.cursor()
+            cursor.execute("SELECT level FROM user_permissions WHERE group_id=? AND user_id=?", 
+                         (group_id, parent_id))
+            parent_level = cursor.fetchone()[0]
+            if level <= parent_level:  # 新权限等级必须大于父级
+                msg = f"权限等级必须比授权者({parent_level})低一级"
+                self.logger.error(msg)
+                return False, msg
+
             cursor.execute("""
             INSERT INTO user_permissions (group_id, user_id, level, parent_id)
             VALUES (?, ?, ?, ?)
