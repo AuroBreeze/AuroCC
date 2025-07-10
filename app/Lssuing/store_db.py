@@ -184,85 +184,124 @@ class Store_db:
             if self.conn:
                 self.conn.close()
 
-    def check_user_permission(self, group_id: str, user_id: str, required_level: int):
+    def check_user_permission(self, group_id: str, user_id: str, required_level: int = 3) -> bool:
         """检查用户权限
         权限级别: 
         1=最高权限(系统管理员)
         2=付费用户(群组管理员)
         3=普通用户
-        """
-        cursor = self.conn.cursor()
-        # 检查直接权限
-        cursor.execute("""
-        SELECT level FROM user_permissions 
-        WHERE group_id = ? AND user_id = ?
-        """, (group_id, user_id))
-        result = cursor.fetchone()
-        
-        if result and result[0] <= required_level:
-            return True
-            
-        # 检查通过上级继承的权限
-        cursor.execute("""
-        WITH RECURSIVE permission_tree AS (
-            SELECT user_id, level, parent_id
-            FROM user_permissions
-            WHERE group_id = ? AND user_id = ?
-            
-            UNION ALL
-            
-            SELECT u.user_id, u.level, u.parent_id
-            FROM user_permissions u
-            JOIN permission_tree p ON u.user_id = p.parent_id
-            WHERE u.group_id = ?
-        )
-        SELECT MIN(level) FROM permission_tree
-        """, (group_id, user_id, group_id))
-        
-        min_level = cursor.fetchone()[0]
 
-        return min_level is not None and min_level <= required_level
+        :param group_id: 群组ID
+        :param user_id: 用户ID
+        :param required_level: 需要的权限级别
+        :return: 用户权限级别，如果用户没有指定权限级别或权限不足，返回None
+        """
+        try:
+            from config.env import QQ_ADMIN
+            if user_id == QQ_ADMIN:  # 管理员权限
+                return True
+
+            cursor = self.conn.cursor()
+            # 检查直接权限
+            cursor.execute("""
+            SELECT level FROM user_permissions 
+            WHERE group_id = ? AND user_id = ?
+            """, (group_id, user_id))
+            result = cursor.fetchone()
+            
+            if result and result[0] <= required_level:
+                return True
+                
+            # 检查通过上级继承的权限
+            cursor.execute("""
+            WITH RECURSIVE permission_tree AS (
+                SELECT user_id, level, parent_id
+                FROM user_permissions
+                WHERE group_id = ? AND user_id = ?
+                
+                UNION ALL
+                
+                SELECT u.user_id, u.level, u.parent_id
+                FROM user_permissions u
+                JOIN permission_tree p ON u.user_id = p.parent_id
+                WHERE u.group_id = ?
+            )
+            SELECT MIN(level) FROM permission_tree
+            """, (group_id, user_id, group_id))
+            
+            min_level = cursor.fetchone()[0]
+
+            return min_level is not None and min_level <= required_level
+        except Exception as e:
+            self.logger.error(f"检查用户权限失败: {e}")
+            return False
+        finally:
+            if self.conn:
+                self.conn.close()
 
     def can_manage_user(self, group_id: str, manager_id: str, target_user_id: str):
-        """检查用户是否有权限管理目标用户"""
-        cursor = self.conn.cursor()
+        """
+        检查用户是否有权限管理目标用户
         
-        # 获取管理者的权限级别
-        cursor.execute("""
-        SELECT level FROM user_permissions 
-        WHERE group_id = ? AND user_id = ?
-        """, (group_id, manager_id))
-        manager_level = cursor.fetchone()
+        :param group_id: 群组ID
+        :param manager_id: 管理者ID
+        :param target_user_id: 目标用户ID
+        :return: 如果用户有权限管理目标用户，返回True，否则返回False
         
-        if not manager_level:
-            return False
+        """
+        try:
+            cursor = self.conn.cursor()
             
-        manager_level = manager_level[0]
-        
-        # 获取目标用户的权限级别
-        cursor.execute("""
-        SELECT level FROM user_permissions 
-        WHERE group_id = ? AND user_id = ?
-        """, (group_id, target_user_id))
-        target_level = cursor.fetchone()
-        
-        # 如果目标用户不存在或级别更高，不能管理
-        if not target_level or manager_level >= target_level[0]:
-            return False
+            # 获取管理者的权限级别
+            cursor.execute("""
+            SELECT level FROM user_permissions 
+            WHERE group_id = ? AND user_id = ?
+            """, (group_id, manager_id))
+            manager_level = cursor.fetchone()
             
-        # 1级可以管理2级和3级
-        # 2级只能管理3级
-        return (manager_level == 1 and target_level[0] in [2, 3]) or \
-               (manager_level == 2 and target_level[0] == 3)
+            if not manager_level:
+                return False
+                
+            manager_level = manager_level[0]
+            
+            # 获取目标用户的权限级别
+            cursor.execute("""
+            SELECT level FROM user_permissions 
+            WHERE group_id = ? AND user_id = ?
+            """, (group_id, target_user_id))
+            target_level = cursor.fetchone()
+            
+            # 如果目标用户不存在或级别更高，不能管理
+            if not target_level or manager_level >= target_level[0]:
+                return False
+                
+            # 1级可以管理2级和3级
+            # 2级只能管理3级
+            return (manager_level == 1 and target_level[0] in [2, 3]) or \
+                   (manager_level == 2 and target_level[0] == 3)
+        except Exception as e:
+            self.logger.error(f"检查管理权限失败: {e}")
+            return False
+        finally:
+            if self.conn:
+                self.conn.close()
                
     def remove_user_permission(self, group_id: str, manager_id: str, target_user_id: str):
-        """移除用户权限"""
-        if not self.can_manage_user(group_id, manager_id, target_user_id):
-            self.logger.error(f"用户 {manager_id} 无权移除 {target_user_id} 的权限")
-            return False
-            
-        cursor = self.conn.cursor()
+        """
+        移除用户权限
+        
+        :param group_id: 群组ID
+        :param manager_id: 管理者ID
+        :param target_user_id: 目标用户ID
+        :return: (是否成功, 错误信息)
+        """
         try:
+            if not self.can_manage_user(group_id, manager_id, target_user_id):
+                msg = f"用户 {manager_id} 无权移除 {target_user_id} 的权限"
+                self.logger.error(msg)
+                return False, msg
+                
+            cursor = self.conn.cursor()
             # 删除用户权限记录
             cursor.execute("""
             DELETE FROM user_permissions 
@@ -276,76 +315,112 @@ class Store_db:
             """, (group_id, target_user_id))
             
             self.conn.commit()
-            return True
+            return True, ""
         except Exception as e:
             self.logger.error(f"移除用户权限失败: {e}")
             self.conn.rollback()
-            return False
+            return False, str(e)
+        finally:
+            if self.conn:
+                self.conn.close()
 
-    def get_group_permission(self, group_id: str):
-        """获取群组权限信息"""
-        cursor = self.conn.cursor()
-        cursor.execute("""
-        SELECT * FROM group_permissions WHERE group_id = ?
-        """, (group_id,))
-        return cursor.fetchone()
-
-    def list_group_users(self, group_id: str):
-        """列出群组所有授权用户"""
-        cursor = self.conn.cursor()
-        cursor.execute("""
-        SELECT p.*, a.start_time, a.end_time, a.features 
-        FROM user_permissions p
-        JOIN user_authorizations a ON p.group_id = a.group_id AND p.user_id = a.user_id
-        WHERE p.group_id = ? AND datetime('now') BETWEEN a.start_time AND a.end_time
-        """, (group_id,))
-        return cursor.fetchall()
-
-    def get_manageable_users(self, group_id: str, manager_id: str):
-        """获取用户可以管理的用户列表"""
-        if not self.check_user_permission(group_id, manager_id, 2):
-            return []
-            
-        cursor = self.conn.cursor()
-        
-        # 获取管理者的权限级别
-        cursor.execute("""
-        SELECT level FROM user_permissions 
-        WHERE group_id = ? AND user_id = ?
-        """, (group_id, manager_id))
-        manager_level = cursor.fetchone()
-        
-        if not manager_level:
-            return []
-            
-        manager_level = manager_level[0]
-        
-        # 根据管理者级别查询可管理的用户
-        if manager_level == 1:  # 系统管理员可以管理2级和3级
-            cursor.execute("""
-            SELECT p.user_id, p.level, a.start_time, a.end_time, a.features
-            FROM user_permissions p
-            JOIN user_authorizations a ON p.group_id = a.group_id AND p.user_id = a.user_id
-            WHERE p.group_id = ? AND p.level IN (2, 3)
-            """, (group_id,))
-        else:  # 群组管理员(2级)只能管理3级
-            cursor.execute("""
-            SELECT p.user_id, p.level, a.start_time, a.end_time, a.features
-            FROM user_permissions p
-            JOIN user_authorizations a ON p.group_id = a.group_id AND p.user_id = a.user_id
-            WHERE p.group_id = ? AND p.level = 3
-            """, (group_id,))
-            
-        return cursor.fetchall()
-        
-    def promote_to_group_admin(self, group_id: str, admin_id: str, user_id: str):
-        """将用户提升为群组管理员(2级权限)"""
-        if not self.check_user_permission(group_id, admin_id, 1):
-            self.logger.error(f"用户 {admin_id} 无权提升 {user_id} 为群组管理员")
-            return False
-            
-        cursor = self.conn.cursor()
+    def get_group_permission(self, group_id: str) -> tuple[dict, str]:
+        """获取群组权限信息
+        :return: (权限信息, 错误信息) 如果出错则权限信息为None
+        """
         try:
+            cursor = self.conn.cursor()
+            cursor.execute("""
+            SELECT * FROM group_permissions WHERE group_id = ?
+            """, (group_id,))
+            result = cursor.fetchone()
+            if not result:
+                return None, f"群组{group_id}不存在"
+            return result, ""
+        except Exception as e:
+            self.logger.error(f"获取群组权限失败: {e}")
+            return None, str(e)
+        finally:
+            if self.conn:
+                self.conn.close()
+
+    def list_group_users(self, group_id: str) -> tuple[list, str]:
+        """列出群组所有授权用户
+        :return: (用户列表, 错误信息) 如果出错则用户列表为空
+        """
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute("""
+            SELECT p.*, a.start_time, a.end_time, a.features 
+            FROM user_permissions p
+            JOIN user_authorizations a ON p.group_id = a.group_id AND p.user_id = a.user_id
+            WHERE p.group_id = ? AND datetime('now') BETWEEN a.start_time AND a.end_time
+            """, (group_id,))
+            return cursor.fetchall(), ""
+        except Exception as e:
+            self.logger.error(f"列出群组用户失败: {e}")
+            return [], str(e)
+        finally:
+            if self.conn:
+                self.conn.close()
+
+    def get_manageable_users(self, group_id: str, manager_id: str) -> tuple[list, str]:
+        """获取用户可以管理的用户列表
+        :return: (用户列表, 错误信息) 如果出错则用户列表为空
+        """
+        try:
+            if not self.check_user_permission(group_id, manager_id, 2):
+                return [], "权限不足"
+                
+            cursor = self.conn.cursor()
+            
+            # 获取管理者的权限级别
+            cursor.execute("""
+            SELECT level FROM user_permissions 
+            WHERE group_id = ? AND user_id = ?
+            """, (group_id, manager_id))
+            manager_level = cursor.fetchone()
+            
+            if not manager_level:
+                return [], "管理者权限不存在"
+                
+            manager_level = manager_level[0]
+            
+            # 根据管理者级别查询可管理的用户
+            if manager_level == 1:  # 系统管理员可以管理2级和3级
+                cursor.execute("""
+                SELECT p.user_id, p.level, a.start_time, a.end_time, a.features
+                FROM user_permissions p
+                JOIN user_authorizations a ON p.group_id = a.group_id AND p.user_id = a.user_id
+                WHERE p.group_id = ? AND p.level IN (2, 3)
+                """, (group_id,))
+            else:  # 群组管理员(2级)只能管理3级
+                cursor.execute("""
+                SELECT p.user_id, p.level, a.start_time, a.end_time, a.features
+                FROM user_permissions p
+                JOIN user_authorizations a ON p.group_id = a.group_id AND p.user_id = a.user_id
+                WHERE p.group_id = ? AND p.level = 3
+                """, (group_id,))
+                
+            return cursor.fetchall(), ""
+        except Exception as e:
+            self.logger.error(f"获取可管理用户失败: {e}")
+            return [], str(e)
+        finally:
+            if self.conn:
+                self.conn.close()
+        
+    def promote_to_group_admin(self, group_id: str, admin_id: str, user_id: str) -> tuple[bool, str]:
+        """将用户提升为群组管理员(2级权限)
+        :return: (是否成功, 错误信息)
+        """
+        try:
+            if not self.check_user_permission(group_id, admin_id, 1):
+                msg = f"用户 {admin_id} 无权提升 {user_id} 为群组管理员"
+                self.logger.error(msg)
+                return False, msg
+                
+            cursor = self.conn.cursor()
             # 更新用户权限级别为2(群组管理员)
             cursor.execute("""
             UPDATE user_permissions 
@@ -354,11 +429,38 @@ class Store_db:
             """, (admin_id, group_id, user_id))
             
             self.conn.commit()
-            return True
+            return True, ""
         except Exception as e:
             self.logger.error(f"提升用户权限失败: {e}")
             self.conn.rollback()
-            return False
+            return False, str(e)
+        finally:
+            if self.conn:
+                self.conn.close()
+
+    def get_user_permission_level(self, group_id: str, user_id: str) -> tuple[int, str]:
+        """
+        获取用户在群组中的权限等级
+        返回: (权限等级, 错误信息) 如果出错则等级为-1
+        """
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute("""
+            SELECT level FROM user_permissions 
+            WHERE group_id = ? AND user_id = ?
+            """, (group_id, user_id))
+            
+            result = cursor.fetchone()
+            if not result:
+                return -1, f"用户{user_id}在群组{group_id}中没有权限记录"
+                
+            return result[0], ""
+        except Exception as e:
+            self.logger.error(f"查询用户权限等级失败: {e}")
+            return -1, str(e)
+        finally:
+            if self.conn:
+                self.conn.close()
 
     def __str__(self):
         return "create database for admin and user"
