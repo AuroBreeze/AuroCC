@@ -15,18 +15,14 @@ class Clock_learn():
         self.user_id = None
         self.message = message
         self.websocket = websocket
-        self.last_reset_time = datetime.now(self.bj_tz)
         self.logger.debug(f"初始化Clock_learn, 当前打卡记录: {json.dumps(share_date.clock_records, default=str)}")
         
     def _check_reset_time(self):
         """检查是否到达重置时间(凌晨1点)"""
         now = datetime.now(self.bj_tz)
-        # 如果上次重置不是今天，且当前时间>=1:00
-        if (self.last_reset_time.date() != now.date() and 
-            now.hour >= 1 and 
-            (now - self.last_reset_time).total_seconds() > 3600):  # 确保至少间隔1小时
+        if now.hour == 1 and now.minute == 0:  # 凌晨1点
+            self.logger.info("已到达重置时间，正在重置打卡记录...")
             self._reset_clock_records()
-            self.last_reset_time = now
             
     def _reset_clock_records(self):
         """每天凌晨1点重置打卡记录"""
@@ -60,8 +56,8 @@ class Clock_learn():
 
         self.user_id = self.message.get("user_id")
         # 调试日志
-        self.logger.error(f"当前用户ID: {self.user_id}")
-        self.logger.error(f"当前打卡记录: {json.dumps(share_date.clock_records, default=str)}")
+        # self.logger.error(f"当前用户ID: {self.user_id}")
+        # self.logger.error(f"当前打卡记录: {json.dumps(share_date.clock_records, default=str)}")
         
         # 处理开始打卡
         if msg == "开始":
@@ -80,7 +76,7 @@ class Clock_learn():
             if task_name not in share_date.clock_records[self.user_id]:
                 share_date.clock_records[self.user_id][task_name] = []
             
-            print(share_date.clock_records)
+            # print(share_date.clock_records)
             
             # 检查是否有未结束的打卡
             if any(record["end"] is None for record in share_date.clock_records[self.user_id][task_name]):
