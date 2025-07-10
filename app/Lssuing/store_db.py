@@ -13,9 +13,14 @@ class Store_db:
         self.db_path = lssuing_cfg.DB_PATH + "store_db.db"
         self.timezone = lssuing_cfg.TIMEZONE
         self.bj_tz = pytz.timezone(self.timezone)
-        self.conn = sqlite3.connect(self.db_path)
+        self.conn = None
 
-        self._init_dbs()
+    def _get_connection(self):
+        """获取数据库连接"""
+        if self.conn is None:
+            self.conn = sqlite3.connect(self.db_path)
+            self._init_dbs()
+        return self.conn
 
     def _init_dbs(self):
         cursor = self.conn.cursor()
@@ -86,7 +91,8 @@ class Store_db:
         :return: 成功返回True，失败返回False
         """
         try:
-            cursor = self.conn.cursor()
+            conn = self._get_connection()
+            cursor = conn.cursor()
             
             # 检查群组权限是否存在
             cursor.execute("""
@@ -114,35 +120,54 @@ class Store_db:
             VALUES (?, ?, ?, ?)
             """, (group_id, owner_id, level, parent_id))
             
-            self.conn.commit()
+            conn.commit()
             return True
         except Exception as e:
             self.logger.error(f"创建群组权限失败: {e}")
             return False
-        finally:
-            if self.conn:
-                self.conn.close()
     
-    def add_group_authorization(self, group_id: str, user_id: str,start_time: str, end_time: str, features: str) -> bool:
-
+    def add_group_authorization(self, group_id: str, user_id: str, start_time: str, end_time: str, features: str) -> tuple[bool, str]:
         """
-        群组授权管理，群组详细授权
+        群组授权管理，群组详细授权（存在则更新，不存在则插入）
 
         :param group_id: 群组ID
         :param user_id: 被授权用户ID
         :param start_time: 授权开始时间
         :param end_time: 授权结束时间
         :param features: 授权功能JSON格式字符串
-        :return: 成功返回True，失败返回False
+        :return: 成功返回True,失败返回False
         """
-        cursor = self.conn.cursor()
-        cursor.execute("""
-        INSERT INTO user_authorizations (group_id, user_id, start_time, end_time, features)
-        VALUES (?, ?, ?, ?, ?)
-        """, (group_id, user_id, start_time, end_time, features))
-
-        self.conn.commit()
-        return True
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            
+            # 检查记录是否存在
+            cursor.execute("""
+            SELECT COUNT(*) FROM user_authorizations 
+            WHERE group_id=? AND user_id=?
+            """, (group_id, user_id))
+            
+            if cursor.fetchone()[0] > 0:
+                # 存在则更新
+                cursor.execute("""
+                UPDATE user_authorizations 
+                SET start_time=?, end_time=?, features=?
+                WHERE group_id=? AND user_id=?
+                """, (start_time, end_time, features, group_id, user_id))
+            else:
+                # 不存在则插入
+                cursor.execute("""
+                INSERT INTO user_authorizations (group_id, user_id, start_time, end_time, features)
+                VALUES (?, ?, ?, ?, ?)
+                """, (group_id, user_id, start_time, end_time, features))
+            
+            conn.commit()
+            return True, None
+        except Exception as e:
+            conn.rollback()
+            msg = "群组授权失败"
+            self.logger.error(f"群组授权失败: {e}")
+            return False, msg
     def add_user_authorization(self, group_id: str, user_id: str, level: int, 
                              parent_id: str) -> tuple[bool, str]:
         """
@@ -161,8 +186,10 @@ class Store_db:
                 self.logger.error(f"用户{parent_id}没有2级权限")
                 return False,msg
 
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            
             # 新增：验证权限等级必须比授权者低一级
-            cursor = self.conn.cursor()
             cursor.execute("SELECT level FROM user_permissions WHERE group_id=? AND user_id=?", 
                          (group_id, parent_id))
             parent_level = cursor.fetchone()[0]
@@ -175,14 +202,11 @@ class Store_db:
             INSERT INTO user_permissions (group_id, user_id, level, parent_id)
             VALUES (?, ?, ?, ?)
             """, (group_id, user_id, level, parent_id))
-            self.conn.commit()
+            conn.commit()
             return True,None
         except Exception as e:
             self.logger.error(f"添加用户授权失败: {e}")
             return False, str(e)
-        finally:
-            if self.conn:
-                self.conn.close()
 
     def check_user_permission(self, group_id: str, user_id: str, required_level: int = 3) -> bool:
         """检查用户权限
@@ -198,10 +222,11 @@ class Store_db:
         """
         try:
             from config.env import QQ_ADMIN
-            if user_id == QQ_ADMIN:  # 管理员权限
+            if user_id == str(QQ_ADMIN):  # 管理员权限
                 return True
 
-            cursor = self.conn.cursor()
+            conn = self._get_connection()
+            cursor = conn.cursor()
             # 检查直接权限
             cursor.execute("""
             SELECT level FROM user_permissions 
@@ -235,9 +260,6 @@ class Store_db:
         except Exception as e:
             self.logger.error(f"检查用户权限失败: {e}")
             return False
-        finally:
-            if self.conn:
-                self.conn.close()
 
     def can_manage_user(self, group_id: str, manager_id: str, target_user_id: str):
         """
@@ -250,7 +272,8 @@ class Store_db:
         
         """
         try:
-            cursor = self.conn.cursor()
+            conn = self._get_connection()
+            cursor = conn.cursor()
             
             # 获取管理者的权限级别
             cursor.execute("""
@@ -282,9 +305,6 @@ class Store_db:
         except Exception as e:
             self.logger.error(f"检查管理权限失败: {e}")
             return False
-        finally:
-            if self.conn:
-                self.conn.close()
                
     def remove_user_permission(self, group_id: str, manager_id: str, target_user_id: str):
         """
@@ -301,7 +321,8 @@ class Store_db:
                 self.logger.error(msg)
                 return False, msg
                 
-            cursor = self.conn.cursor()
+            conn = self._get_connection()
+            cursor = conn.cursor()
             # 删除用户权限记录
             cursor.execute("""
             DELETE FROM user_permissions 
@@ -314,22 +335,20 @@ class Store_db:
             WHERE group_id = ? AND user_id = ?
             """, (group_id, target_user_id))
             
-            self.conn.commit()
+            conn.commit()
             return True, ""
         except Exception as e:
             self.logger.error(f"移除用户权限失败: {e}")
-            self.conn.rollback()
+            conn.rollback()
             return False, str(e)
-        finally:
-            if self.conn:
-                self.conn.close()
 
     def get_group_permission(self, group_id: str) -> tuple[dict, str]:
         """获取群组权限信息
         :return: (权限信息, 错误信息) 如果出错则权限信息为None
         """
         try:
-            cursor = self.conn.cursor()
+            conn = self._get_connection()
+            cursor = conn.cursor()
             cursor.execute("""
             SELECT * FROM group_permissions WHERE group_id = ?
             """, (group_id,))
@@ -340,16 +359,14 @@ class Store_db:
         except Exception as e:
             self.logger.error(f"获取群组权限失败: {e}")
             return None, str(e)
-        finally:
-            if self.conn:
-                self.conn.close()
 
     def list_group_users(self, group_id: str) -> tuple[list, str]:
         """列出群组所有授权用户
         :return: (用户列表, 错误信息) 如果出错则用户列表为空
         """
         try:
-            cursor = self.conn.cursor()
+            conn = self._get_connection()
+            cursor = conn.cursor()
             cursor.execute("""
             SELECT p.*, a.start_time, a.end_time, a.features 
             FROM user_permissions p
@@ -369,10 +386,10 @@ class Store_db:
         :return: (用户列表, 错误信息) 如果出错则用户列表为空
         """
         try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
             if not self.check_user_permission(group_id, manager_id, 2):
                 return [], "权限不足"
-                
-            cursor = self.conn.cursor()
             
             # 获取管理者的权限级别
             cursor.execute("""
@@ -412,15 +429,20 @@ class Store_db:
         
     def promote_to_group_admin(self, group_id: str, admin_id: str, user_id: str) -> tuple[bool, str]:
         """将用户提升为群组管理员(2级权限)
+
+        :param group_id: 群组ID
+        :param admin_id: 提升的用户ID
+        :param user_id: 被提升的用户ID
         :return: (是否成功, 错误信息)
         """
         try:
+            conn = self._get_connection()
             if not self.check_user_permission(group_id, admin_id, 1):
                 msg = f"用户 {admin_id} 无权提升 {user_id} 为群组管理员"
                 self.logger.error(msg)
                 return False, msg
                 
-            cursor = self.conn.cursor()
+            cursor = conn.cursor()
             # 更新用户权限级别为2(群组管理员)
             cursor.execute("""
             UPDATE user_permissions 
@@ -429,7 +451,7 @@ class Store_db:
             """, (admin_id, group_id, user_id))
             
             self.conn.commit()
-            return True, ""
+            return True, None
         except Exception as e:
             self.logger.error(f"提升用户权限失败: {e}")
             self.conn.rollback()
@@ -444,7 +466,8 @@ class Store_db:
         返回: (权限等级, 错误信息) 如果出错则等级为-1
         """
         try:
-            cursor = self.conn.cursor()
+            conn = self._get_connection()
+            cursor = conn.cursor()
             cursor.execute("""
             SELECT level FROM user_permissions 
             WHERE group_id = ? AND user_id = ?
@@ -452,9 +475,9 @@ class Store_db:
             
             result = cursor.fetchone()
             if not result:
-                return -1, f"用户{user_id}在群组{group_id}中没有权限记录"
+                return 4, f"用户{user_id}在群组{group_id}中没有权限记录"
                 
-            return result[0], ""
+            return result[0], None
         except Exception as e:
             self.logger.error(f"查询用户权限等级失败: {e}")
             return -1, str(e)
