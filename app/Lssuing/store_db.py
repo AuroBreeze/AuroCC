@@ -10,10 +10,12 @@ class Store_db:
     """
     def __init__(self):
         self.logger = Logger("Lssuing_store_db")
-        self.db_path = lssuing_cfg.DB_PATH
+        self.db_path = lssuing_cfg.DB_PATH + "store_db.db"
         self.timezone = lssuing_cfg.TIMEZONE
         self.bj_tz = pytz.timezone(self.timezone)
         self.conn = sqlite3.connect(self.db_path)
+
+        self._init_dbs()
 
     def _init_dbs(self):
         cursor = self.conn.cursor()
@@ -22,7 +24,8 @@ class Store_db:
         CREATE TABLE IF NOT EXISTS group_permissions (
             group_id TEXT PRIMARY KEY,
             owner_id TEXT NOT NULL,  -- 群组所有者
-            create_time DATETIME DEFAULT CURRENT_TIMESTAMP
+            create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(group_id)
         )
         """)
         
@@ -35,8 +38,7 @@ class Store_db:
             level INTEGER NOT NULL,  -- 权限级别(1=最高,2=第二级,3=最低)
             parent_id TEXT,         -- 上级授权人
             create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (group_id) REFERENCES group_permissions(group_id) ON DELETE CASCADE,
-            UNIQUE(user_id)
+            FOREIGN KEY (group_id) REFERENCES group_permissions(group_id) ON DELETE CASCADE
         )
         """)
         
@@ -69,25 +71,57 @@ class Store_db:
         CREATE INDEX IF NOT EXISTS idx_user_auth_time 
         ON user_authorizations(start_time, end_time)
         """)
+
         self.conn.commit()
 
-
-    def create_group_permission(self, group_id: str, owner_id: str, parent_id:str ,level:int = 2)-> bool:
+    def create_group_permission(self, group_id: str, owner_id: str, parent_id:str, level:int = 2) -> bool:
         """
-        授权群组,并设置权限(2级权限)
+        创建或更新群组权限(2级权限)
         """
-        cursor = self.conn.cursor()
-        cursor.execute("""
-        INSERT INTO group_permissions (group_id, owner_id)
-        VALUES (?, ?)
-        """, (group_id, owner_id))
-
-        cursor.execute("""
-        INSERT INTO user_permissions (group_id, user_id, level, parent_id)
-        VALUES (?, ?, ?, ?)
-        """, (group_id, owner_id, level, parent_id))
-        self.conn.commit()
-        return True
+        try:
+            cursor = self.conn.cursor()
+            
+            # 检查群组权限是否存在
+            cursor.execute("""
+            SELECT COUNT(*) FROM group_permissions 
+            WHERE group_id = ?
+            """, (group_id,))
+            group_exists = cursor.fetchone()[0] > 0
+            
+            # 检查用户权限是否存在
+            cursor.execute("""
+            SELECT COUNT(*) FROM user_permissions 
+            WHERE group_id = ? AND user_id = ?
+            """, (group_id, owner_id))
+            user_exists = cursor.fetchone()[0] > 0
+            
+            # 创建或更新群组权限
+            if group_exists:
+                cursor.execute("""
+                UPDATE group_permissions 
+                SET owner_id = ?
+                WHERE group_id = ?
+                """, (owner_id, group_id))
+            else:
+                cursor.execute("""
+                INSERT INTO group_permissions (group_id, owner_id)
+                VALUES (?, ?)
+                """, (group_id, owner_id))
+            
+            # 创建或更新用户权限
+            cursor.execute("""
+            INSERT OR REPLACE INTO user_permissions (group_id, user_id, level, parent_id)
+            VALUES (?, ?, ?, ?)
+            """, (group_id, owner_id, level, parent_id))
+            
+            self.conn.commit()
+            return True
+        except Exception as e:
+            self.logger.error(f"创建群组权限失败: {e}")
+            return False
+        finally:
+            if self.conn:
+                self.conn.close()
     
     def add_group_authorization(self, group_id: str, user_id: str,start_time: str, end_time: str, features: str) -> bool:
 
@@ -99,23 +133,34 @@ class Store_db:
         INSERT INTO user_authorizations (group_id, user_id, start_time, end_time, features)
         VALUES (?, ?, ?, ?, ?)
         """, (group_id, user_id, start_time, end_time, features))
+
+        self.conn.commit()
         return True
     def add_user_authorization(self, group_id: str, user_id: str, level: int, 
-                             parent_id: str) -> bool:
+                             parent_id: str) -> tuple[bool, str]:
         """
         添加用户授权
         """
+        try:
+            # 检查父用户权限等级
+            if self.check_user_permission(group_id, parent_id, 2) == False:
+                msg = f"用户{user_id}没有2级权限"
+                self.logger.error(f"用户{parent_id}没有2级权限")
+                return False,msg
 
-        # 检查父用户权限等级
-        if self.check_user_permission(group_id, parent_id, 2) == False:
-            return False
-
-        cursor = self.conn.cursor()
-        cursor.execute("""
-        INSERT INTO user_permissions (group_id, user_id, level, parent_id)
-        VALUES (?, ?, ?, ?)
-        """, (group_id, user_id, level, parent_id))
-        return True
+            cursor = self.conn.cursor()
+            cursor.execute("""
+            INSERT INTO user_permissions (group_id, user_id, level, parent_id)
+            VALUES (?, ?, ?, ?)
+            """, (group_id, user_id, level, parent_id))
+            self.conn.commit()
+            return True,None
+        except Exception as e:
+            self.logger.error(f"添加用户授权失败: {e}")
+            return False, str(e)
+        finally:
+            if self.conn:
+                self.conn.close()
 
     def check_user_permission(self, group_id: str, user_id: str, required_level: int):
         """检查用户权限
@@ -153,6 +198,7 @@ class Store_db:
         """, (group_id, user_id, group_id))
         
         min_level = cursor.fetchone()[0]
+
         return min_level is not None and min_level <= required_level
 
     def can_manage_user(self, group_id: str, manager_id: str, target_user_id: str):
