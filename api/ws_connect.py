@@ -25,7 +25,8 @@ class Websocket_receiver:
                     self.logger.info("Message Received: %s" % message)
                     await Raw_data.put(message)
                     
-                    await Msg_dispatcher().AuroCC_answer(websocket, message)
+                    # await Msg_dispatcher().AuroCC_answer(websocket, message)
+                    await Msg_dispatcher().Learn_clock(websocket, message)
                     
                     # # 如果是心跳消息，检查是否需要主动发送消息
                     # if isinstance(message, dict) and message.get("type") == "heartbeat":
