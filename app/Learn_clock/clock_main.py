@@ -5,11 +5,8 @@ from config import env
 from api.Botapi import QQAPI_list
 from . import share_date
 import json
-import threading
-import schedule
 import asyncio
 import time
-from app.Learn_clock.share_date import clock_records
 
 class Clock_learn():
     def __init__(self, websocket, message:dict):
@@ -18,18 +15,18 @@ class Clock_learn():
         self.user_id = None
         self.message = message
         self.websocket = websocket
+        self.last_reset_time = datetime.now(self.bj_tz)
         self.logger.debug(f"初始化Clock_learn, 当前打卡记录: {json.dumps(share_date.clock_records, default=str)}")
         
-        # 启动定时任务线程
-        self.scheduler_thread = threading.Thread(target=self._run_scheduler, daemon=True)
-        self.scheduler_thread.start()
-        
-    def _run_scheduler(self):
-        """运行定时任务"""
-        schedule.every().day.at("01:00").do(self._reset_clock_records)
-        while True:
-            schedule.run_pending()
-            time.sleep(60)
+    def _check_reset_time(self):
+        """检查是否到达重置时间(凌晨1点)"""
+        now = datetime.now(self.bj_tz)
+        # 如果上次重置不是今天，且当前时间>=1:00
+        if (self.last_reset_time.date() != now.date() and 
+            now.hour >= 1 and 
+            (now - self.last_reset_time).total_seconds() > 3600):  # 确保至少间隔1小时
+            self._reset_clock_records()
+            self.last_reset_time = now
             
     def _reset_clock_records(self):
         """每天凌晨1点重置打卡记录"""
@@ -42,7 +39,7 @@ class Clock_learn():
         # 发送重置通知到所有群组
         if hasattr(self, 'websocket'):
             try:
-                group_ids = ["123456", "654321"]  # 这里需要替换为实际的群组ID列表
+                group_ids = ["299355209"]  # 这里需要替换为实际的群组ID列表
                 for group_id in group_ids:
                     asyncio.run_coroutine_threadsafe(
                         QQAPI_list(self.websocket).send_group_message(
@@ -71,7 +68,7 @@ class Clock_learn():
             await self.send_message("打卡格式不正确，请使用：开始 [任务名称]\n例如：开始 单词")
             return
             
-        if msg.startswith("开始"):
+        if msg.startswith("开始 "):
             if len(msg) <= 3 or not msg[3:].strip():
                 await self.send_message("请指定打卡任务名称，格式为：开始 [任务名称]\n例如：开始 单词")
                 return
@@ -105,7 +102,69 @@ class Clock_learn():
         
         # 处理结束打卡
         elif msg == "结束":
-            await self.send_message("打卡格式不正确，请使用：结束 [任务名称]\n例如：结束 单词")
+            if self.user_id not in share_date.clock_records:
+                await self.send_message("没有找到任何未结束的打卡记录")
+                return
+                
+            # 查找所有未结束的打卡
+            active_records = []
+            for name, records in share_date.clock_records[self.user_id].items():
+                for record in reversed(records):
+                    if record["end"] is None:
+                        active_records.append(name)
+                        break
+            
+            if not active_records:
+                await self.send_message("没有找到任何未结束的打卡记录")
+            else:
+                task_list = "\n".join([f"- {name}" for name in active_records])
+                await self.send_message(
+                    f"您有以下未结束的打卡任务:\n"
+                    f"{task_list}\n"
+                    f"请使用: 结束 [任务名称] 来结束指定打卡"
+                )
+            return
+            
+        elif msg == "重置":
+            # 只有管理员可以重置
+            if not share_date.is_admin(self.user_id):
+                await self.send_message("⚠️ 您没有权限执行此操作")
+                return
+            
+            self._reset_clock_records()
+            self.send_message("✅ 打卡记录已手动重置")
+            return
+            
+        elif msg.startswith("添加管理员 "):
+            if not share_date.is_admin(self.user_id):
+                await self.send_message("⚠️ 您没有权限执行此操作")
+                return
+                
+            target_id = msg[5:].strip()
+            if not target_id.isdigit():
+                await self.send_message("⚠️ 请输入有效的QQ号")
+                return
+                
+            if share_date.add_admin(target_id):
+                await self.send_message(f"✅ 已添加 {target_id} 为管理员")
+            else:
+                await self.send_message(f"⚠️ {target_id} 已经是管理员")
+            return
+            
+        elif msg.startswith("移除管理员 "):
+            if not share_date.is_admin(self.user_id):
+                await self.send_message("⚠️ 您没有权限执行此操作")
+                return
+                
+            target_id = msg[5:].strip()
+            if not target_id.isdigit():
+                await self.send_message("⚠️ 请输入有效的QQ号")
+                return
+                
+            if share_date.remove_admin(target_id):
+                await self.send_message(f"✅ 已移除 {target_id} 的管理员权限")
+            else:
+                await self.send_message(f"⚠️ {target_id} 不是管理员")
             return
             
         elif msg == "打卡查询":
@@ -152,7 +211,32 @@ class Clock_learn():
             
             await self.send_message(response)
             
-        elif msg.startswith("结束"):
+        elif msg == "帮助" or msg == "菜单":
+            help_msg = """📋 打卡系统命令菜单
+
+👤 普通用户命令:
+• 开始 [任务名称] - 开始新的打卡任务
+  例: 开始 单词
+• 结束 [任务名称] - 结束指定打卡任务
+  例: 结束 单词
+• 打卡查询 - 查看今日打卡统计
+• 帮助/菜单 - 显示本帮助菜单
+
+👑 管理员命令:
+• 重置 - 手动重置所有打卡记录
+• 添加管理员 [QQ号] - 添加管理员
+  例: 添加管理员 123456
+• 移除管理员 [QQ号] - 移除管理员
+  例: 移除管理员 123456
+
+📝 注意:
+1. 方括号[]表示必填参数
+2. 不要输入方括号本身
+3. 命令与参数之间用空格分隔"""
+            await self.send_message(help_msg)
+            return
+            
+        elif msg.startswith("结束 "):
             if len(msg) <= 3 or not msg[3:].strip():
                 await self.send_message("请指定要结束的打卡任务名称，格式为：结束 [任务名称]\n例如：结束 单词")
                 return
@@ -231,15 +315,6 @@ class Clock_learn():
                 f"📌 打卡次数: {completed_count}次\n"
                 f"⏳ 累计时长: {int(total_hours)}小时{int(total_minutes)}分钟{int(total_seconds)}秒"
             )
-            
-            total_hours, total_remainder = divmod(total_duration.total_seconds(), 3600)
-            total_minutes, total_seconds = divmod(total_remainder, 60)
-            
-            await self.send_message(
-                f"📊 今日'{task_name}'累计时长: "
-                f"{int(total_hours)}小时{int(total_minutes)}分钟{int(total_seconds)}秒"
-            )
-    
     async def send_message(self, message):
         if self.message.get("message_type") == "group":
             await QQAPI_list(self.websocket).send_group_message(

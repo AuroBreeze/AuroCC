@@ -4,12 +4,13 @@ import pytz
 from config.environment.basic import TIMEZONE
 
 class Logger:
-    def __init__(self, log_name='root'):
+    def __init__(self, log_name='root',level='INFO'):
+        self.level = str(level)
         # 创建日志记录器
         self.logger = colorlog.getLogger(log_name)  # 创建日志记录器
         # 设置日志输出格式,输出INFO级别的日志，并添加时区信息
         colorlog.basicConfig(
-            level='INFO', 
+            level=self.level, 
             format='%(log_color)s[%(asctime)s Shanghai][%(name)s][%(levelname)s] %(message)s',
             datefmt='%Y-%m-%d %H:%M:%S', 
             reset=True
