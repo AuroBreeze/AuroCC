@@ -196,9 +196,10 @@ class Store_db:
                          (group_id, parent_id))
             parent_level = cursor.fetchone()[0]
             if level <= parent_level:  # 新权限等级必须大于父级
-                msg = f"权限等级必须比授权者({parent_level})低一级"
-                self.logger.error(msg)
-                return False, msg
+                if self.check_user_permission(group_id, parent_id, 1) == False:
+                    msg = f"权限等级必须比授权者({parent_level})低一级"
+                    self.logger.error(msg)
+                    return False, msg
 
             cursor.execute("""
             INSERT INTO user_permissions (group_id, user_id, level, parent_id)
@@ -224,7 +225,7 @@ class Store_db:
         """
         try:
             from config.env import QQ_ADMIN
-            if user_id == str(QQ_ADMIN):  # 管理员权限
+            if str(user_id) == str(QQ_ADMIN):  # 管理员权限
                 return True
 
             conn = self._get_connection()

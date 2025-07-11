@@ -3,9 +3,6 @@ import pytz
 from api.Logger_owner import Logger
 from config import env
 from api.Botapi import QQAPI_list
-import json
-import asyncio
-import time
 from .store_db import *
 class Mandated_group():
     def __init__(self,websocket, message):
