@@ -26,10 +26,12 @@ class GroupService:
         group_id = message.get("group_id")
         user_id = str(message.get("user_id"))
         
-        # 检查用户权限
-        if not self.auth.check_permission(group_id, user_id, 1):
-            level, msg = self.auth.get_permission_level(group_id, user_id)
-            return False, f"用户{user_id}权限不足"
+        # 检查用户权限(包含管理员检查)
+        from config import env
+        if str(user_id) != str(env.QQ_ADMIN):  # 管理员直接通过
+            if not self.auth.check_permission(group_id, user_id, 1):
+                level, msg = self.auth.get_permission_level(group_id, user_id)
+                return False, f"用户{user_id}权限不足"
         
         # 解析授权数据
         data = {}
@@ -83,10 +85,12 @@ class GroupService:
         group_id = message.get("group_id")
         user_id = str(message.get("user_id"))
         
-        # 检查用户权限
-        if not self.auth.check_permission(group_id, user_id, 1):
-            level, msg = self.auth.get_permission_level(group_id, user_id)
-            return False, f"用户{user_id}权限不足"
+        # 检查用户权限(包含管理员检查)
+        from config import env
+        if str(user_id) != str(env.QQ_ADMIN):  # 管理员直接通过
+            if not self.auth.check_permission(group_id, user_id, 1):
+                level, msg = self.auth.get_permission_level(group_id, user_id)
+                return False, f"用户{user_id}权限不足"
         
         target_group = msg.split(" ")[1]
 
@@ -109,10 +113,12 @@ class GroupService:
         group_id = message.get("group_id")
         user_id = str(message.get("user_id"))
         
-        # 检查用户权限
-        if not self.auth.check_permission(group_id, user_id, 1):
-            level, msg = self.auth.get_permission_level(group_id, user_id)
-            return False, f"用户{user_id}权限不足,用户权限为 {level}"
+        # 检查用户权限(包含管理员检查)
+        from config import env
+        if str(user_id) != str(env.QQ_ADMIN):  # 管理员直接通过
+            if not self.auth.check_permission(group_id, user_id, 1):
+                level, msg = self.auth.get_permission_level(group_id, user_id)
+                return False, f"用户{user_id}权限不足,用户权限为 {level}"
         
         parts = msg.split(" ")
         target_group_id = parts[1]

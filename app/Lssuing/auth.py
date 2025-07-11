@@ -1,11 +1,11 @@
 from api.Logger_owner import Logger
 from .store_db import Store_db
-from config import env
+from .auth_interface import IAuthManager
 
 logger = Logger("Lssuing_auth")
 
-class AuthManager:
-    """权限管理类，集中处理所有权限逻辑"""
+class AuthManager(IAuthManager):
+    """权限管理实现类"""
     
     def __init__(self, db: Store_db):
         self.db = db
@@ -19,10 +19,6 @@ class AuthManager:
         :param required_level: 需要的权限级别(1=最高,2=第二级,3=最低)
         :return: 是否有权限
         """
-        # 管理员权限检查
-        if str(user_id) == str(env.QQ_ADMIN):
-            return True
-            
         return self.db.check_user_permission(group_id, user_id, required_level)
         
     def get_permission_level(self, group_id: str, user_id: str) -> tuple[int, str]:
