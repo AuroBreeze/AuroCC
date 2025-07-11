@@ -53,3 +53,14 @@ class AuthManager(IAuthManager):
         :return: (是否成功提升权限, 错误信息)
         """
         return self.db.add_user_authorization(group_id, user_id, level, parent_id)
+    def remove_user_permission(self, group_id: str, manager_id: str, target_user_id: str) -> tuple[bool, str]:
+        """
+        移除用户权限
+
+        :param group_id: 群组ID
+        :param manager_id: 管理者ID
+        :param target_user_id: 目标用户ID
+
+        :return: (是否成功, 错误信息)
+        """
+        return self.db.remove_user_permission(group_id, manager_id, target_user_id)

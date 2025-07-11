@@ -23,3 +23,8 @@ class IAuthManager(ABC):
     def raise_user_permission(self, group_id: str, user_id: str, parent_id: str, level: int = 3) -> Tuple[bool, str]:
         """提升用户权限"""
         pass
+    
+    @abstractmethod
+    def remove_user_permission(self, group_id: str, manager_id: str, target_user_id: str) -> Tuple[bool, str]:
+        """移除用户权限"""
+        pass
