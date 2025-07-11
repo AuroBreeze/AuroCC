@@ -1,5 +1,5 @@
 from api.Logger_owner import Logger
-from .services.group_service import GroupService
+from .services.auth import GroupService
 from .store_db import Store_db
 
 class Mandated_group():
@@ -33,14 +33,15 @@ class Manage_group_authorization():
         if self.message.get("message_type") != "group":
             return
 
-        judge, msg = await self.group_service.authorize_group(self.message)
+        # 群组授权
+        judge, msg = await self.group_service.authorize_group(self.message) 
         if msg is not None:
             await self.group_service.send_group_message(self.websocket, self.message.get("group_id"), msg)
-        
+        # 取消群组授权
         judge, msg = await self.group_service.remove_authorization(self.message)
         if msg is not None:
             await self.group_service.send_group_message(self.websocket, self.message.get("group_id"), msg)
-
+        # 提升用户权限
         judge, msg = await self.group_service.raise_user_permission(self.message)
         if msg is not None:
             await self.group_service.send_group_message(self.websocket, self.message.get("group_id"), msg)

@@ -182,12 +182,12 @@ class Store_db:
         :return: 成功返回True，失败返回False
         """
         try:
-            if level < 1 or level > 3:
+            if level <= 1 or level > 3:
                 return False, "权限级别错误"
             # 检查父用户权限等级
             if self.check_user_permission(group_id, parent_id, 2) == False:
                 msg = f"用户{user_id}没有2级权限"
-                self.logger.error(f"用户{parent_id}没有2级权限")
+                self.logger.warning(f"用户{parent_id}没有2级权限")
                 return False,msg
 
             conn = self._get_connection()
@@ -200,7 +200,7 @@ class Store_db:
             if level <= parent_level:  # 新权限等级必须大于父级
                 if self.check_user_permission(group_id, parent_id, 1) == False:
                     msg = f"权限等级必须比授权者({parent_level})低一级"
-                    self.logger.error(msg)
+                    self.logger.warning(msg)
                     return False, msg
 
             cursor.execute("""
@@ -357,7 +357,7 @@ class Store_db:
         try:
             if not self.can_manage_user(group_id, manager_id, target_user_id):
                 msg = f"用户 {manager_id} 无权移除 {target_user_id} 的权限"
-                self.logger.error(msg)
+                self.logger.warning(msg)
                 return False, msg
                 
             conn = self._get_connection()
@@ -378,7 +378,6 @@ class Store_db:
             return True, ""
         except Exception as e:
             self.logger.error(f"移除用户权限失败: {e}")
-            conn.rollback()
             return False, str(e)
 
     def get_group_permission(self, group_id: str) -> tuple[dict, str]:

@@ -4,7 +4,7 @@ from api.Logger_owner import Logger
 from api.Botapi import QQAPI_list
 from config import env
 from ..store_db import Store_db
-from ..auth import AuthManager
+from .auth import AuthManager
 from .. import lssuing_cfg
 
 class GroupService:
@@ -118,7 +118,7 @@ class GroupService:
         if str(user_id) != str(env.QQ_ADMIN):  # 管理员直接通过
             if not self.auth.check_permission(group_id, user_id, 1):
                 level, msg = self.auth.get_permission_level(group_id, user_id)
-                return False, f"用户{user_id}权限不足,用户权限为 {level}"
+                return False, msg
         
         parts = msg.split(" ")
         target_group_id = parts[1]
@@ -128,7 +128,7 @@ class GroupService:
         try:
             judge,msg = self.auth.raise_user_permission(target_group_id,target_user,user_id,level)
             if not judge:
-                return False, f"用户{user_id}无权限提升用户{target_user}的权限"
+                return False, msg
             else:
                 return True,msg
         except Exception as e:

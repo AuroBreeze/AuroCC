@@ -1,5 +1,5 @@
 from api.Logger_owner import Logger
-from .store_db import Store_db
+from ..store_db import Store_db
 from .auth_interface import IAuthManager
 
 logger = Logger("Lssuing_auth")
