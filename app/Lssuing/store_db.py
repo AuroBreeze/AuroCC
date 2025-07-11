@@ -457,35 +457,6 @@ class Store_db:
             self.logger.error(f"获取可管理用户失败: {e}")
             return [], str(e)
         
-    def promote_to_group_admin(self, group_id: str, admin_id: str, user_id: str) -> tuple[bool, str]:
-        """将用户提升为群组管理员(2级权限)
-
-        :param group_id: 群组ID
-        :param admin_id: 提升的用户ID
-        :param user_id: 被提升的用户ID
-        :return: (是否成功, 错误信息)
-        """
-        try:
-            conn = self._get_connection()
-            if not self.check_user_permission(group_id, admin_id, 1):
-                msg = f"用户 {admin_id} 无权提升 {user_id} 为群组管理员"
-                self.logger.error(msg)
-                return False, msg
-                
-            cursor = conn.cursor()
-            # 更新用户权限级别为2(群组管理员)
-            cursor.execute("""
-            UPDATE user_permissions 
-            SET level = 2, parent_id = ?
-            WHERE group_id = ? AND user_id = ?
-            """, (admin_id, group_id, user_id))
-            
-            self.conn.commit()
-            return True, None
-        except Exception as e:
-            self.logger.error(f"提升用户权限失败: {e}")
-            return False, str(e)
-
     def get_user_permission_level(self, group_id: str, user_id: str) -> tuple[int, str]:
         """
         获取用户在群组中的权限等级
