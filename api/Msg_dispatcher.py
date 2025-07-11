@@ -1,5 +1,5 @@
 import json
-from app.Lssuing.mandated_group import Mandated
+from app.Lssuing.mandated import Mandated
 from app.Learn_clock.clock_main import Clock_learn
 
 

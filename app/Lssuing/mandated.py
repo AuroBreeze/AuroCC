@@ -1,24 +1,14 @@
 from api.Logger_owner import Logger
-from .services.auth import GroupService
+from .services.group_service import GroupService
 from .store_db import Store_db
 
-class Mandated_group():
+class Mandated():
     def __init__(self, websocket, message):
         self.logger = Logger("Lssuing_mandated_group")
         self.websocket = websocket
         self.message = message
         self.group_service = GroupService(Store_db())
         
-    async def handle_event(self):
-        await Authorize_group(self.websocket, self.message, self.group_service).handle_event()
-
-class Authorize_group():
-    def __init__(self, websocket, message, group_service):
-        self.logger = Logger("Lssuing_authorize_group")
-        self.websocket = websocket
-        self.message = message
-        self.group_service = group_service
-
     async def handle_event(self):
         await Manage_group_authorization(self.websocket, self.message, self.group_service).handle_event()
 
