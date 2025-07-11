@@ -206,7 +206,7 @@ class Store_db:
             VALUES (?, ?, ?, ?)
             """, (group_id, user_id, level, parent_id))
             conn.commit()
-            return True,None
+            return True, f"用户: {user_id} 权限添加成功, 权限等级: {level} ,上级权限人: {parent_id} "
         except Exception as e:
             self.logger.error(f"添加用户授权失败: {e}")
             return False, str(e)
