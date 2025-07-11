@@ -60,7 +60,8 @@ class Store_db:
             end_time DATETIME NOT NULL,
             features TEXT NOT NULL,  -- JSON格式存储授权功能
             create_time DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (group_id) REFERENCES group_permissions(group_id) ON DELETE CASCADE
+            FOREIGN KEY (group_id) REFERENCES group_permissions(group_id) ON DELETE CASCADE,
+            UNIQUE (group_id)
         )
         """)
         

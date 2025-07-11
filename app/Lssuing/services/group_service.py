@@ -7,6 +7,29 @@ from ..store_db import Store_db
 from .auth import AuthManager
 from .. import lssuing_cfg
 
+class GroupService_API:
+    """群组服务层，封装所有群组相关业务逻辑"""
+    def __init__(self, db: Store_db, websocket, message):
+        self.logger = Logger("Lssuing_group_service")
+        self.auth = AuthManager(db)
+        self.service = GroupService(db)
+        self.websocket = websocket
+        self.message = message
+    async def handle_event(self) -> None:
+        """
+        统一处理各种事件
+        """
+        if self.message.get("message_type") != "group":
+            return
+        # 群组授权
+        judge, msg = await self.service.authorize_group(self.message) 
+        if msg is not None:
+            await self.service.send_group_message(self.websocket, self.message.get("group_id"), msg)
+        # 取消群组授权
+        judge, msg = await self.service.remove_authorization(self.message)
+        if msg is not None:
+            await self.service.send_group_message(self.websocket, self.message.get("group_id"), msg)
+
 class GroupService:
     """1级权限，群组服务层，封装所有群组相关业务逻辑"""
     
@@ -14,8 +37,7 @@ class GroupService:
         self.logger = Logger("Lssuing_group_service")
         self.db = db
         self.auth = AuthManager(db)
-        self.bj_tz = pytz.timezone(env.TIMEZONE)
-        
+        self.bj_tz = pytz.timezone(lssuing_cfg.TIMEZONE)
     async def authorize_group(self, message) -> tuple[bool, str]:
         """处理群组授权"""
         msg = str(message.get("raw_message"))
@@ -27,7 +49,6 @@ class GroupService:
         user_id = str(message.get("user_id"))
         
         # 检查用户权限(包含管理员检查)
-        from config import env
         if str(user_id) != str(env.QQ_ADMIN):  # 管理员直接通过
             if not self.auth.check_permission(group_id, user_id, 1):
                 level, msg = self.auth.get_permission_level(group_id, user_id)
@@ -86,7 +107,6 @@ class GroupService:
         user_id = str(message.get("user_id"))
         
         # 检查用户权限(包含管理员检查)
-        from config import env
         if str(user_id) != str(env.QQ_ADMIN):  # 管理员直接通过
             if not self.auth.check_permission(group_id, user_id, 1):
                 level, msg = self.auth.get_permission_level(group_id, user_id)
@@ -103,36 +123,7 @@ class GroupService:
         except Exception as e:
             return False, f"取消授权过程中发生错误: {str(e)}"
 
-    async def raise_user_permission(self,message) -> tuple[bool, str]:
-        """提升用户权限"""
-        msg = str(message.get("raw_message"))
-        if not msg.startswith("raise "):
-            self.logger.debug("无效的权限提高命令格式")
-            return False, None
-        
-        group_id = message.get("group_id")
-        user_id = str(message.get("user_id"))
-        
-        # 检查用户权限(包含管理员检查)
-        from config import env
-        if str(user_id) != str(env.QQ_ADMIN):  # 管理员直接通过
-            if not self.auth.check_permission(group_id, user_id, 1):
-                level, msg = self.auth.get_permission_level(group_id, user_id)
-                return False, msg
-        
-        parts = msg.split(" ")
-        target_group_id = parts[1]
-        target_user = parts[2]
-        level = int(parts[3])
 
-        try:
-            judge,msg = self.auth.raise_user_permission(target_group_id,target_user,user_id,level)
-            if not judge:
-                return False, msg
-            else:
-                return True,msg
-        except Exception as e:
-            return False, f"权限提高过程中发生错误: {str(e)}"
 
     async def send_group_message(self, websocket, group_id, message):
         """发送群消息"""
