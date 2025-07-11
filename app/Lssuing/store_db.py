@@ -144,23 +144,23 @@ class Store_db:
             conn = self._get_connection()
             cursor = conn.cursor()
             
-            # 检查记录是否存在
-            cursor.execute("""
-            SELECT COUNT(*) FROM group_information 
-            WHERE group_id=? AND user_id=?
-            """, (group_id, user_id))
+            # # 检查记录是否存在
+            # cursor.execute("""
+            # SELECT COUNT(*) FROM group_information 
+            # WHERE group_id=? AND user_id=?
+            # """, (group_id, user_id))
             
-            if cursor.fetchone()[0] > 0:
-                # 存在则更新
-                cursor.execute("""
-                UPDATE group_information 
-                SET start_time=?, end_time=?, features=?
-                WHERE group_id=? AND user_id=?
-                """, (start_time, end_time, features, group_id, user_id))
-            else:
-                # 不存在则插入
-                cursor.execute("""
-                INSERT INTO group_information (group_id, user_id, start_time, end_time, features)
+            # if cursor.fetchone()[0] > 0:
+            #     # 存在则更新
+            #     cursor.execute("""
+            #     UPDATE group_information 
+            #     SET start_time=?, end_time=?, features=?
+            #     WHERE group_id=? AND user_id=?
+            #     """, (start_time, end_time, features, group_id, user_id))
+            # else:
+            #     # 不存在则插入
+            cursor.execute("""
+                INSERT OR REPLACE INTO group_information (group_id, user_id, start_time, end_time, features)
                 VALUES (?, ?, ?, ?, ?)
                 """, (group_id, user_id, start_time, end_time, features))
             
@@ -182,6 +182,8 @@ class Store_db:
         :return: 成功返回True，失败返回False
         """
         try:
+            if level < 1 or level > 3:
+                return False, "权限级别错误"
             # 检查父用户权限等级
             if self.check_user_permission(group_id, parent_id, 2) == False:
                 msg = f"用户{user_id}没有2级权限"
@@ -202,7 +204,7 @@ class Store_db:
                     return False, msg
 
             cursor.execute("""
-            INSERT INTO user_permissions (group_id, user_id, level, parent_id)
+            INSERT OR REPLACE INTO user_permissions (group_id, user_id, level, parent_id)
             VALUES (?, ?, ?, ?)
             """, (group_id, user_id, level, parent_id))
             conn.commit()

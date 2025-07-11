@@ -97,7 +97,7 @@ class GroupService:
         try:
             judge,msg = self.db.remove_authorize_group(group_id=target_group)
             if judge:
-                return True, msg
+                return True, f"已取消群组 {target_group} 的授权"
             else:
                 return False, f"取消群授权失败: {msg}"
         except Exception as e:
