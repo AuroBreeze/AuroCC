@@ -29,7 +29,10 @@ class GroupService_API:
         judge, msg = await self.service.remove_authorization(self.message)
         if msg is not None:
             await self.service.send_group_message(self.websocket, self.message.get("group_id"), msg)
-
+        # 获取群组信息
+        judge, msg = await self.service.get_group_information(self.message)
+        if msg is not None:
+            await self.service.send_group_message(self.websocket, self.message.get("group_id"), msg)
 class GroupService:
     """1级权限，群组服务层，封装所有群组相关业务逻辑"""
     
@@ -48,11 +51,10 @@ class GroupService:
         group_id = message.get("group_id")
         user_id = str(message.get("user_id"))
         
-        # 检查用户权限(包含管理员检查)
-        if str(user_id) != str(env.QQ_ADMIN):  # 管理员直接通过
-            if not self.auth.check_permission(group_id, user_id, 1):
-                level, msg = self.auth.get_permission_level(group_id, user_id)
-                return False, f"用户{user_id}权限不足"
+        # 检查用户权限
+        check_judge, check_msg = self.auth.permission_evaluation_and_assessment(group_id, user_id, 1)
+        if not check_judge:
+            return False, check_msg
         
         # 解析授权数据
         data = {}
@@ -106,11 +108,10 @@ class GroupService:
         group_id = message.get("group_id")
         user_id = str(message.get("user_id"))
         
-        # 检查用户权限(包含管理员检查)
-        if str(user_id) != str(env.QQ_ADMIN):  # 管理员直接通过
-            if not self.auth.check_permission(group_id, user_id, 1):
-                level, msg = self.auth.get_permission_level(group_id, user_id)
-                return False, f"用户{user_id}权限不足"
+        # 检查用户权限
+        check_judge, check_msg = self.auth.permission_evaluation_and_assessment(group_id, user_id, 1)
+        if not check_judge:
+            return False, check_msg
         
         target_group = msg.split(" ")[1]
 
@@ -122,8 +123,33 @@ class GroupService:
                 return False, f"取消群授权失败: {msg}"
         except Exception as e:
             return False, f"取消授权过程中发生错误: {str(e)}"
+    
+    async def get_group_information(self, message) -> tuple[bool, str]:
+        """
+        获取群授权信息
+        """
+        msg = str(message.get("raw_message"))
+        if not msg.startswith("get_group_information "): # get_group_information <target_group_id>
+            self.logger.debug("无效的获取群权限命令格式")
+            return False, None
+        
+        group_id = message.get("group_id")
+        user_id = str(message.get("user_id"))
+        
+        # 检查用户权限
+        check_judge, check_msg = self.auth.permission_evaluation_and_assessment(group_id, user_id, 2)
+        if not check_judge:
+            return False, check_msg
+        
+        
+        part = msg.split(" ")
+        target_group_id = part[1]
 
-
+        info,msg = self.db.get_group_information(target_group_id, user_id)
+        if info: # (3, '736038975', '1732373074', '2025-07-11 21:14:11', '2025-07-21 21:14:11', 'all', '2025-07-11 13:14:11')
+            return True, f"群组: {target_group_id}\n管理员: {info[2]}\n创建时间: {info[3]}\n到期时间: {info[4]}\n群组权限: {info[5]}"
+        else:
+            return False, msg
 
     async def send_group_message(self, websocket, group_id, message):
         """发送群消息"""

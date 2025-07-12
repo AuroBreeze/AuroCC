@@ -4,6 +4,7 @@ from . import lssuing_cfg
 from api.Logger_owner import Logger
 import pytz
 from datetime import datetime
+from config.env import QQ_ADMIN
 
 class Store_db:
     """
@@ -202,8 +203,8 @@ class Store_db:
         """检查用户权限
         权限级别: 
         1=最高权限(系统管理员)
-        2=付费用户(群组管理员)
-        3=普通用户
+        2=付费用户(群组拥有者)
+        3=管理员(群组管理员)
 
         :param group_id: 群组ID
         :param user_id: 用户ID
@@ -211,13 +212,12 @@ class Store_db:
         :return: 用户权限级别，如果用户没有指定权限级别或权限不足，返回None
         """
         try:
-            from config.env import QQ_ADMIN
             if str(user_id) == str(QQ_ADMIN):  # 管理员权限
                 return True
-
             conn = self._get_connection()
             cursor = conn.cursor()
             # 检查直接权限
+            
             cursor.execute("""
             SELECT level FROM user_permissions 
             WHERE group_id = ? AND user_id = ?
@@ -226,27 +226,10 @@ class Store_db:
             
             if result and result[0] <= required_level:
                 return True
-                
-            # 检查通过上级继承的权限
-            cursor.execute("""
-            WITH RECURSIVE permission_tree AS (
-                SELECT user_id, level, parent_id
-                FROM user_permissions
-                WHERE group_id = ? AND user_id = ?
-                
-                UNION ALL
-                
-                SELECT u.user_id, u.level, u.parent_id
-                FROM user_permissions u
-                JOIN permission_tree p ON u.user_id = p.parent_id
-                WHERE u.group_id = ?
-            )
-            SELECT MIN(level) FROM permission_tree
-            """, (group_id, user_id, group_id))
+            else:
+                self.logger.warning(f"用户 {user_id} 在群组 {group_id} 中没有足够的权限,用户的权限等级为 {result[0]}")
+                return False
             
-            min_level = cursor.fetchone()[0]
-
-            return min_level is not None and min_level <= required_level
         except Exception as e:
             self.logger.error(f"检查用户权限失败: {e}")
             return False
@@ -371,25 +354,73 @@ class Store_db:
         except Exception as e:
             self.logger.error(f"移除用户权限失败: {e}")
             return False, f"移除用户权限失败: {e}"
-
-    def get_group_permission(self, group_id: str) -> tuple[dict, str]:
+        
+    def get_user_ascription(self, user_id: str) -> tuple[list, str]:
         """
-        获取群组权限信息
+        获取用户归属的群组
+
+        :param user_id: 用户ID
+        :return: (群组列表, 错误信息)
+        """
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+
+            cursor.execute("""
+            SELECT group_id FROM user_permissions 
+            WHERE user_id = ?
+            """, (user_id,))
+            
+            rows = cursor.fetchall()
+            if not rows:
+                self.logger.debug(f"用户 {user_id} 没有归属的群组")
+                return [], f"用户 {user_id} 没有归属的群组"
+                
+            return [row[0] for row in rows], ""
+        except Exception as e:
+            self.logger.error(f"获取用户归属的群组失败: {e}")
+            return [], f"获取用户归属的群组失败: {e}"
+
+    def get_group_information(self, group_id: str, user_id: str) -> tuple[dict, str]:
+        """
+        获取群组信息,用户仅能查找属于自己归属的群组
         :return: (权限信息, 错误信息) 如果出错则权限信息为None
         """
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
+
+            # 获取用户归属的群组
             cursor.execute("""
-            SELECT * FROM group_permissions WHERE group_id = ?
+            SELECT group_id FROM user_permissions WHERE user_id = ?
+            """, (user_id,))
+            group_list = [row[0] for row in cursor.fetchall()]
+            
+            if group_id not in group_list and user_id != QQ_ADMIN:
+                msg = f"用户{user_id}不属于群组{group_id}"
+                self.logger.warning(msg)
+                return None, msg
+
+            # 使用更高效的查询方式
+            cursor.execute("""
+            SELECT id, group_id, user_id, start_time, end_time, features, create_time 
+            FROM group_information 
+            WHERE group_id = ? 
+            LIMIT 1
             """, (group_id,))
+            
             result = cursor.fetchone()
             if not result:
+                self.logger.warning(f"群组{group_id}不存在")
                 return None, f"群组{group_id}不存在"
+                
             return result, None
+        except sqlite3.OperationalError as e:
+            self.logger.error(f"数据库操作失败: {e}")
+            return None, f"数据库操作失败: {e}"
         except Exception as e:
-            self.logger.error(f"获取群组权限失败: {e}")
-            return None, f"获取群组权限失败: {e}"
+            self.logger.error(f"获取群组信息失败: {e}")
+            return None, f"获取群组信息失败: {e}"
 
     def list_group_users(self, group_id: str) -> tuple[list, str]:
         """列出群组所有授权用户

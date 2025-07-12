@@ -52,11 +52,10 @@ class UserService:
         group_id = message.get("group_id")
         user_id = str(message.get("user_id"))
         
-        # 检查用户权限(包含管理员检查)
-        if str(user_id) != str(env.QQ_ADMIN):  # 管理员直接通过
-            if not self.auth.check_permission(group_id, user_id, 1):
-                level, msg = self.auth.get_permission_level(group_id, user_id)
-                return False, msg
+        # 检查用户权限
+        check_judge, check_msg = self.auth.permission_evaluation_and_assessment(group_id, user_id, 1)
+        if not check_judge:
+            return False, check_msg
         
         parts = msg.split(" ")
         target_group_id = parts[1]
@@ -81,11 +80,10 @@ class UserService:
         group_id = message.get("group_id")
         executor_id = str(message.get("user_id"))
         
-        # 检查用户权限(包含管理员检查)
-        if str(executor_id) != str(env.QQ_ADMIN):  # 管理员直接通过
-            if not self.auth.check_permission(group_id, executor_id, 1):
-                level, msg = self.auth.get_permission_level(group_id, executor_id)
-                return False, msg
+        # 检查用户权限
+        check_judge, check_msg = self.auth.permission_evaluation_and_assessment(group_id, executor_id, 1)
+        if not check_judge:
+            return False, check_msg
         
         part = msg.split(" ")
         target_group_id = part[1]
@@ -100,7 +98,7 @@ class UserService:
         except Exception as e:
             return False, f"取消权限过程中发生错误: {str(e)}"
 
-    
+
 
     async def send_group_message(self, websocket, group_id, message):
         """发送群消息"""

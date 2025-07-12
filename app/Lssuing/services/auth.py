@@ -1,13 +1,14 @@
 from api.Logger_owner import Logger
 from ..store_db import Store_db
 from .auth_interface import IAuthManager
+from config import env
 
-logger = Logger("Lssuing_auth")
 
 class AuthManager(IAuthManager):
     """权限管理实现类"""
     
     def __init__(self, db: Store_db):
+        self.logger = Logger("Lssuing_auth")
         self.db = db
         
     def check_permission(self, group_id: str, user_id: str, required_level: int) -> bool:
@@ -64,3 +65,14 @@ class AuthManager(IAuthManager):
         :return: (是否成功, 错误信息)
         """
         return self.db.remove_user_permission(group_id, manager_id, target_user_id)
+
+    def permission_evaluation_and_assessment(self, group_id: str, user_id: str, level: int = 1) -> tuple[bool, str]:
+        try:
+            if not self.check_permission(group_id, user_id, level):  
+                user_level, msg = self.get_permission_level(group_id, user_id)
+                self.logger.warning(f"用户 {user_id} 权限不足,所需权限为 {level} ,当前权限为 {user_level} ")
+                return False, f"用户 {user_id} 权限不足,所需权限为 {level} ,当前权限为 {user_level} "
+            return True,None
+        except Exception as e:
+            self.logger.error(f"权限检查失败: {e}")
+            return False,f"权限检查失败: {e}"
