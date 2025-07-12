@@ -4,7 +4,7 @@ from api.Logger_owner import Logger
 from api.Botapi import QQAPI_list
 from config import env
 from ..sql.store_db import Store_db
-from ..auth import AuthManager
+from ..auth.auth import AuthManager
 from ... import lssuing_cfg
 
 class UserService_admin_API:
