@@ -304,7 +304,7 @@ class Store_db:
     def can_manage_user(self, group_id: str, manager_id: str, target_user_id: str):
         """
         检查用户是否有权限管理目标用户
-        
+         
         :param group_id: 群组ID
         :param manager_id: 管理者ID
         :param target_user_id: 目标用户ID
@@ -323,6 +323,7 @@ class Store_db:
             manager_level = cursor.fetchone()
             
             if not manager_level:
+                self.logger.debug(f"用户 {manager_id} 不存在")
                 return False
                 
             manager_level = manager_level[0]
@@ -333,9 +334,15 @@ class Store_db:
             WHERE group_id = ? AND user_id = ?
             """, (group_id, target_user_id))
             target_level = cursor.fetchone()
-            
+
+            # 如果目标用户没有权限，则返回False
+            if target_level is None:
+                self.logger.debug(f"用户{target_user_id}没有任何权限")
+                return False
+    
             # 如果目标用户不存在或级别更高，不能管理
-            if not target_level or manager_level >= target_level[0]:
+            if manager_level >= target_level[0]:
+                self.logger.debug(f"执行用户为 {manager_id}，目标用户为 {target_user_id}，执行用户权限级别为 {manager_level}，目标用户权限级别为 {target_level[0]}，不能管理")
                 return False
                 
             # 1级可以管理2级和3级
