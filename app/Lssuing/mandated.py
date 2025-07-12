@@ -1,7 +1,7 @@
 from api.Logger_owner import Logger
-from .services.group_service import GroupService_API
-from .services.user_service import UserService_API
-from .store_db import Store_db
+from .services.admin.group_service import GroupService_admin_API
+from .services.admin.user_service import UserService_admin_API
+from .services.user.group_service import GroupService_user_API
 
 class Mandated():
     """
@@ -29,7 +29,8 @@ class Manage_authorization_API():
         self.websocket = websocket
 
     async def handle_event(self) -> tuple[bool, str]:
-        await GroupService_API(Store_db(), self.websocket, self.message).handle_event()
-        await UserService_API(Store_db(), self.websocket, self.message).handle_event()
+        await GroupService_admin_API(self.websocket, self.message).handle_event()
+        await UserService_admin_API(self.websocket, self.message).handle_event()
+        await GroupService_user_API(self.websocket, self.message).handle_event()
 
 

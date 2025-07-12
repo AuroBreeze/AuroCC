@@ -1,6 +1,5 @@
 import sqlite3
-import os
-from . import lssuing_cfg
+from ... import lssuing_cfg
 from api.Logger_owner import Logger
 import pytz
 from datetime import datetime

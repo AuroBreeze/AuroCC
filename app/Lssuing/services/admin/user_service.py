@@ -3,18 +3,19 @@ import pytz
 from api.Logger_owner import Logger
 from api.Botapi import QQAPI_list
 from config import env
-from ..store_db import Store_db
-from .auth import AuthManager
-from .. import lssuing_cfg
+from ..sql.store_db import Store_db
+from ..auth import AuthManager
+from ... import lssuing_cfg
 
-class UserService_API:
+class UserService_admin_API:
     """
-    群组用户权限服务层,封装群组用户权限相关功能
+    群组用户权限服务层,封装admin权限群组用户权限相关功能
     """
-    def __init__(self, db: Store_db, websocket, message):
+    def __init__(self, websocket, message):
         self.logger = Logger("Lssuing_group_service")
-        self.auth = AuthManager(db)
-        self.service = UserService(db)
+        self.db = Store_db()
+        self.auth = AuthManager(self.db)
+        self.service = UserService(self.db)
         self.websocket = websocket
         self.message = message
     async def handle_event(self) -> None:

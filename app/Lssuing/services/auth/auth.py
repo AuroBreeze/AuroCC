@@ -1,6 +1,6 @@
 from api.Logger_owner import Logger
-from ..store_db import Store_db
-from .auth_interface import IAuthManager
+from ..sql.store_db import Store_db
+from ..auth.auth_interface import IAuthManager
 from config import env
 
 
