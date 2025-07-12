@@ -3,6 +3,7 @@ import os
 from . import lssuing_cfg
 from api.Logger_owner import Logger
 import pytz
+from datetime import datetime
 
 class Store_db:
     """
@@ -144,22 +145,6 @@ class Store_db:
         try:
             conn = self._get_connection()
             cursor = conn.cursor()
-            
-            # # 检查记录是否存在
-            # cursor.execute("""
-            # SELECT COUNT(*) FROM group_information 
-            # WHERE group_id=? AND user_id=?
-            # """, (group_id, user_id))
-            
-            # if cursor.fetchone()[0] > 0:
-            #     # 存在则更新
-            #     cursor.execute("""
-            #     UPDATE group_information 
-            #     SET start_time=?, end_time=?, features=?
-            #     WHERE group_id=? AND user_id=?
-            #     """, (start_time, end_time, features, group_id, user_id))
-            # else:
-            #     # 不存在则插入
             cursor.execute("""
                 INSERT OR REPLACE INTO group_information (group_id, user_id, start_time, end_time, features)
                 VALUES (?, ?, ?, ?, ?)
@@ -168,9 +153,8 @@ class Store_db:
             conn.commit()
             return True, f"群组{group_id}授权成功,获权用户{user_id}"
         except Exception as e:
-            msg = "群组授权失败"
             self.logger.error(f"群组授权失败: {e}")
-            return False, msg
+            return False, f"群组授权失败: {e}"
     def add_user_authorization(self, group_id: str, user_id: str, level: int, 
                              parent_id: str) -> tuple[bool, str]:
         """
@@ -212,7 +196,7 @@ class Store_db:
             return True, f"用户: {user_id} 权限添加成功, 权限等级: {level} ,上级权限人: {parent_id} "
         except Exception as e:
             self.logger.error(f"添加用户授权失败: {e}")
-            return False, str(e)
+            return False, f"添加用户授权失败: {e}"
 
     def check_user_permission(self, group_id: str, user_id: str, required_level: int = 3) -> bool:
         """检查用户权限
@@ -299,9 +283,9 @@ class Store_db:
             return True, None
         except Exception as e:
             self.logger.error(f"删除授权群 {group_id} 失败: {str(e)}")
-            return False, str(e)
+            return False, f"删除授权群 {group_id} 失败: {str(e)}"
 
-    def can_manage_user(self, group_id: str, manager_id: str, target_user_id: str):
+    def can_manage_user(self, group_id: str, manager_id: str, target_user_id: str) -> bool:
         """
         检查用户是否有权限管理目标用户
          
@@ -386,10 +370,11 @@ class Store_db:
             return True, ""
         except Exception as e:
             self.logger.error(f"移除用户权限失败: {e}")
-            return False, str(e)
+            return False, f"移除用户权限失败: {e}"
 
     def get_group_permission(self, group_id: str) -> tuple[dict, str]:
-        """获取群组权限信息
+        """
+        获取群组权限信息
         :return: (权限信息, 错误信息) 如果出错则权限信息为None
         """
         try:
@@ -401,10 +386,10 @@ class Store_db:
             result = cursor.fetchone()
             if not result:
                 return None, f"群组{group_id}不存在"
-            return result, ""
+            return result, None
         except Exception as e:
             self.logger.error(f"获取群组权限失败: {e}")
-            return None, str(e)
+            return None, f"获取群组权限失败: {e}"
 
     def list_group_users(self, group_id: str) -> tuple[list, str]:
         """列出群组所有授权用户
@@ -422,7 +407,7 @@ class Store_db:
             return cursor.fetchall(), ""
         except Exception as e:
             self.logger.error(f"列出群组用户失败: {e}")
-            return [], str(e)
+            return [], f"列出群组用户失败: {e}"
 
     def get_manageable_users(self, group_id: str, manager_id: str) -> tuple[list, str]:
         """获取用户可以管理的用户列表
@@ -465,7 +450,7 @@ class Store_db:
             return cursor.fetchall(), ""
         except Exception as e:
             self.logger.error(f"获取可管理用户失败: {e}")
-            return [], str(e)
+            return [], f"获取可管理用户失败: {e}"
         
     def get_user_permission_level(self, group_id: str, user_id: str) -> tuple[int, str]:
         """
@@ -487,8 +472,37 @@ class Store_db:
             return result[0], None
         except Exception as e:
             self.logger.error(f"查询用户权限等级失败: {e}")
-            return -1, str(e)
+            return -1, f"查询用户权限等级失败: {e}"
+    
+    def check_group_permission(self, group_id: str) -> tuple[bool, str]:
+        """检查群组是否被授权
+        :return: (是否存在, 错误信息)
+        """
+        try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
 
+            # 先检查是否存在
+            cursor.execute("""
+            SELECT * FROM group_permissions WHERE group_id = ?
+            """, (group_id,))
+            result = cursor.fetchone()
+            if not result:
+                return False, f"群组{group_id}没有任何授权记录"
+
+            # 再检查是否在被授权的时间段
+            cursor.execute("""
+            SELECT * FROM group_information WHERE group_id = ? AND start_time <= ? AND end_time >= ?
+            """, (group_id, datetime.now(self.bj_tz), datetime.now(self.bj_tz)))
+            result = cursor.fetchone()
+            if not result:
+                return False, f"群组{group_id}没有授权,授权时间段为{result[2]}至{result[3]}"
+            
+            return True, None
+            
+        except Exception as e:
+            self.logger.error(f"查询群组授权状态失败: {e}")
+            return False, f"查询群组授权状态失败: {e}"
 
     def __str__(self):
         return "create database for admin and user"

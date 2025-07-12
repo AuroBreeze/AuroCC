@@ -100,6 +100,8 @@ class UserService:
         except Exception as e:
             return False, f"取消权限过程中发生错误: {str(e)}"
 
+    
+
     async def send_group_message(self, websocket, group_id, message):
         """发送群消息"""
         await QQAPI_list(websocket).send_group_message(group_id, message)
