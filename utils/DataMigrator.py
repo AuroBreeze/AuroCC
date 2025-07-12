@@ -1,4 +1,4 @@
-from api.memory_store import MemoryStore
+from api.memory_api.memory_store import MemoryStore
 from api.Logger_owner import Logger
 import sqlite3
 import json
@@ -14,9 +14,13 @@ class DataMigrator:
         
     def migrate_existing_data(self, batch_size=500):
         """迁移短期记忆库中的已有数据"""
-        conn = sqlite3.connect(self.store.short_term_db)
-        cursor = conn.cursor()
-        cursor.execute("SELECT id, content FROM memories")
+        self.migrate_short_term_data(batch_size)
+        self.migrate_long_term_data(batch_size)
+        
+    def migrate_short_term_data(self, batch_size=500):
+        """迁移短期记忆数据"""
+        cursor = self.store.conn.cursor()
+        cursor.execute(f"SELECT id, content FROM user_{self.store.user_id}_short_memories")
         
         vectors = []
         db_ids = []
@@ -37,6 +41,31 @@ class DataMigrator:
         # 处理剩余数据
         if vectors:
             self._batch_add('short', vectors, db_ids)
+            
+    def migrate_long_term_data(self, batch_size=500):
+        """迁移长期记忆数据"""
+        cursor = self.store.conn.cursor()
+        cursor.execute(f"SELECT id, content FROM user_{self.store.user_id}_long_memories")
+        
+        vectors = []
+        db_ids = []
+        for row in cursor:
+            # 解析内容
+            content = json.loads(row[1])['content']
+            # 生成向量
+            vector = self.store.embedder.encode(content)
+            vectors.append(vector)
+            db_ids.append(row[0])
+            
+            # 批量处理
+            if len(vectors) >= batch_size:
+                self._batch_add('long', vectors, db_ids)
+                vectors.clear()
+                db_ids.clear()
+        
+        # 处理剩余数据
+        if vectors:
+            self._batch_add('long', vectors, db_ids)
             
     def _batch_add(self, index_type, vectors, db_ids):
         """批量添加索引"""
@@ -60,6 +89,7 @@ def Main_migrator(user_id:str):
     memory.save_indexes()  # 保存索引
     Logger().info("数据迁移完成")
     Logger().info(f"短期索引条目数: {memory.short_term_index.ntotal}")
+    Logger().info(f"长期索引条目数: {memory.long_term_index.ntotal}")
     
     memory.load_indexes()  # 加载索引
     Logger().info("索引加载完成")
@@ -85,5 +115,3 @@ def Main_migrator(user_id:str):
 if __name__ == "__main__":
     user_id = env.QQ_ADMIN
     Main_migrator(user_id)
-
-        

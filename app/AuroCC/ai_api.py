@@ -8,6 +8,7 @@ import random
 import ast
 from config import env
 from config import bot_personality
+from api.memory_api import memory_tools
 
 
 GF_PROMPT = bot_personality.GF_PROMPT
@@ -54,13 +55,18 @@ class AIApi:
             self.logger.info("加载索引成功")
             try:
                 qurey_text = str(
-                    self.memory_store.get_memory_short())  # 获取刚刚发送的对话内容
+                    #self.memory_store.get_memory_short()
+                    memory_tools.MemoryStore_Tools().get_memory_short()
+                    )  # 获取刚刚发送的对话内容
                 if not qurey_text:  # 数据库为空时初始化第一条记录
                     self.memory_store.add_memory("system_msg", {
                         "content": "系统初始化",
                         "importance": 0
                     })
-                    qurey_text = str(self.memory_store.get_memory_short())
+                    qurey_text = str(
+                        #self.memory_store.get_memory_short()
+                        memory_tools.MemoryStore_Tools().get_memory_short()
+                        )
                 self.logger.info(f"获取最近对话内容: {qurey_text}")
             except:
                 qurey_text = ""
@@ -70,7 +76,8 @@ class AIApi:
             self.logger.error("错误信息: " + str(e))
             qurey_text = "" # 未定义情况的处理
 
-        memories = self.memory_store.search_memories(query_text=qurey_text, top_k=30)  # 获取对话的相关记忆
+        # TODO : 要动态调整top_k的数值,数据少的时候,会因为索引过少而搜索不到结果,导致报错
+        memories = self.memory_store.search_memories(query_text=qurey_text, top_k=5)  # 获取对话的相关记忆
         self.logger.info(f"搜索记忆结果: {memories[:5]}")
         if memories is not None:
             for memory in memories[:10]:
@@ -79,7 +86,7 @@ class AIApi:
         else:
             self.logger.error("搜索记忆无")
 
-        memories_short = self.memory_store.get_memories()  # 加载最近的记忆
+        memories_short = memory_tools.MemoryStore_Tools().get_memories()  # 加载最近的记忆
         if not memories_short:
             self.logger.error("无最近记忆")
             return []
@@ -199,10 +206,10 @@ class AIApi:
             list: 主动聊天的内容
         """
         # 获取最后聊天时间
-        last_chat = self.memory_store.get_memories()
+        last_chat = memory_tools.MemoryStore_Tools().get_memories()
         if not last_chat:
             return []
-        timestamp = str(self.memory_store.get_memory_short_time())
+        timestamp = str(memory_tools.MemoryStore_Tools().get_memory_short_time())
 
         if not timestamp:
             return []
@@ -217,7 +224,7 @@ class AIApi:
         # 准备主动聊天判断数据
         context = {
             "last_chat": last_chat[0],
-            "memories": self.memory_store.get_memories(),
+            "memories": memory_tools.MemoryStore_Tools().get_memories(),
             "current_time": datetime.now(self.bj_tz).isoformat()
         }
         msg = []

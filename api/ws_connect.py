@@ -2,7 +2,7 @@ import websockets
 from api.Logger_owner import Logger # 美化日志输出
 from api.Share_date import Raw_data # 导入原始数据队列
 import asyncio
-from api.Msg_dispatcher import Msg_dispatcher
+from api.Msg_dispatcher import Main_dispatcher_and_run
 from config.env import WS_URL
 
 class Websocket_receiver:
@@ -24,8 +24,11 @@ class Websocket_receiver:
                 async for message in websocket:
                     self.logger.info("Message Received: %s" % message)
                     await Raw_data.put(message)
+                    await Main_dispatcher_and_run().handle_event(websocket, message)
                     
-                    await Msg_dispatcher().AuroCC_answer(websocket, message)
+                    # await Msg_dispatcher().AuroCC_answer(websocket, message)
+                    # await Msg_dispatcher().Learn_clock(websocket, message)
+                    # await Msg_dispatcher().Lssuing(websocket, message)
                     
                     # # 如果是心跳消息，检查是否需要主动发送消息
                     # if isinstance(message, dict) and message.get("type") == "heartbeat":
