@@ -144,45 +144,73 @@
 # except Exception as e:
 #     print(e)
 
-import websockets
-import asyncio
-try:
-    with websockets.connect("ws://127.0.0.1:3001") as websocket:
+# import websockets
+# import asyncio
+# try:
+#     with websockets.connect("ws://127.0.0.1:3001") as websocket:
 
-                # from app.AuroCC.active_message import ActiveMessageHandler
-                # active_handler = ActiveMessageHandler(websocket)
+#                 # from app.AuroCC.active_message import ActiveMessageHandler
+#                 # active_handler = ActiveMessageHandler(websocket)
                 
-        for message in websocket:
-            print(message)
+#         for message in websocket:
+#             print(message)
                     
-                    # # 如果是心跳消息，检查是否需要主动发送消息
-                    # if isinstance(message, dict) and message.get("type") == "heartbeat":
-                    #     user_id = message.get("user_id")
-                    #     if user_id:
-                    #         await active_handler.check_and_send_message(user_id)
+#                     # # 如果是心跳消息，检查是否需要主动发送消息
+#                     # if isinstance(message, dict) and message.get("type") == "heartbeat":
+#                     #     user_id = message.get("user_id")
+#                     #     if user_id:
+#                     #         await active_handler.check_and_send_message(user_id)
 
-except Exception as e:
-    pass
+# except Exception as e:
+#     pass
 
-import http.client
-import json
+# import http.client
+# import json
 
-conn = http.client.HTTPSConnection("")
-payload = json.dumps({
-   "user_id": "1732373074",
-   "message": [
-      {
-         "type": "text",
-         "data": {
-            "text": "napcat"
-         }
-      }
-   ]
-})
-headers = {
-   'Content-Type': 'application/json'
-}
-conn.request("POST", "/send_private_msg", payload, headers)
-res = conn.getresponse()
-data = res.read()
-print(data.decode("utf-8")) 
+# conn = http.client.HTTPSConnection("")
+# payload = json.dumps({
+#    "user_id": "1732373074",
+#    "message": [
+#       {
+#          "type": "text",
+#          "data": {
+#             "text": "napcat"
+#          }
+#       }
+#    ]
+# })
+# headers = {
+#    'Content-Type': 'application/json'
+# }
+# conn.request("POST", "/send_private_msg", payload, headers)
+# res = conn.getresponse()
+# data = res.read()
+# print(data.decode("utf-8")) 
+# msg = "授权群 736038974\nstarttime now\nendtime 30\nuser_id 123123123\nfeatures all"
+# #正则表达式提取各个空格后面的数据，，从\n分开从新提取
+# # 将消息按行分割
+# lines = msg.split('\n')
+
+# # 使用字典存储提取的数据
+# data = {}
+# for line in msg.split('\n'):
+#     # 分割每行的键和值
+#     parts = line.split(' ')
+#     if len(parts) == 2:  # 确保至少有键和值
+#         key = parts[0]
+#         value = ' '.join(parts[1:])  # 处理值中可能有空格的情况
+#         data[key] = value
+
+# # 提取后的数据
+# group_id = data.get('授权群')  # '736038974'
+# start_time = data.get('starttime')  # 'now'
+# end_time = data.get('endtime')  # '30'
+# user_id = data.get('user_id')  # '123123123'
+# features = data.get('features')  # 'all'
+# print(data)
+
+msg = "123 234 123123"
+parts = msg.split(" ")
+print(parts)
+
+
