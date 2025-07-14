@@ -170,3 +170,4 @@ local_model
 *.db
 *.index
 *.pkl
+.aider*
