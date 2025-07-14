@@ -213,4 +213,3 @@ msg = "123 234 123123"
 parts = msg.split(" ")
 print(parts)
 
-
