@@ -68,6 +68,7 @@ class DailyScheduleStore:
                 end TEXT,
                 state TEXT,
                 importance INTEGER DEFAULT 2,
+                progress INTEGER DEFAULT 0,
                 done INTEGER DEFAULT 0,
                 completed_at TEXT,
                 created_at TEXT,
@@ -89,7 +90,8 @@ class DailyScheduleStore:
                         start TEXT,
                         end TEXT,
                         state TEXT,
-                        importance INTEGER DEFAULT 3,
+                        importance INTEGER DEFAULT 2,
+                        progress INTEGER DEFAULT 0,
                         done INTEGER DEFAULT 0,
                         completed_at TEXT,
                         created_at TEXT,
@@ -98,8 +100,8 @@ class DailyScheduleStore:
                 ''')
                 # 拷贝旧数据
                 cursor.execute('''
-                    INSERT INTO daily_schedule_item_new (id, schedule_id, idx, start, end, state, importance, done, completed_at, created_at)
-                    SELECT id, schedule_id, idx, start, end, state, 3 as importance, done, completed_at, created_at FROM daily_schedule_item
+                    INSERT INTO daily_schedule_item_new (id, schedule_id, idx, start, end, state, importance, progress, done, completed_at, created_at)
+                    SELECT id, schedule_id, idx, start, end, state, COALESCE(importance, 2) as importance, COALESCE(progress, 0) as progress, done, completed_at, created_at FROM daily_schedule_item
                 ''')
                 cursor.execute('DROP TABLE daily_schedule_item')
                 cursor.execute('ALTER TABLE daily_schedule_item_new RENAME TO daily_schedule_item')
@@ -110,7 +112,9 @@ class DailyScheduleStore:
             cursor.execute("PRAGMA table_info(daily_schedule_item)")
             cols = [r[1] for r in cursor.fetchall()]
             if 'importance' not in cols:
-                cursor.execute("ALTER TABLE daily_schedule_item ADD COLUMN importance INTEGER DEFAULT 3")
+                cursor.execute("ALTER TABLE daily_schedule_item ADD COLUMN importance INTEGER DEFAULT 2")
+            if 'progress' not in cols:
+                cursor.execute("ALTER TABLE daily_schedule_item ADD COLUMN progress INTEGER DEFAULT 0")
         except Exception:
             pass
         try:
@@ -225,8 +229,8 @@ class DailyScheduleStore:
         for idx, it in enumerate(items):
             cursor.execute(
                 """
-                INSERT INTO daily_schedule_item (schedule_id, idx, start, end, state, importance, done, completed_at, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO daily_schedule_item (schedule_id, idx, start, end, state, importance, progress, done, completed_at, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     int(schedule_id),
@@ -236,9 +240,10 @@ class DailyScheduleStore:
                     str(it.get('state', '')),
                     (lambda v: (
                         (lambda parsed: max(1, min(5, parsed)))(
-                            (lambda s: (3 if s is None or s == '' else (int(s) if str(s).strip('-').isdigit() else 3)))(v)
+                            (lambda s: (2 if s is None or s == '' else (int(s) if str(s).strip('-').isdigit() else 2)))(v)
                         )
-                    ))(it.get('importance', 3)),
+                    ))(it.get('importance', 2)),
+                    int(max(0, min(100, int(str(it.get('progress', 0)).strip()))) ) if str(it.get('progress', '')).lstrip('-').isdigit() else 0,
                     1 if bool(it.get('done')) else 0,
                     created_at if bool(it.get('done')) else None,
                     created_at,
@@ -250,7 +255,7 @@ class DailyScheduleStore:
     def list_items_by_schedule(self, schedule_id: int):
         cursor = self.conn.cursor()
         cursor.execute(
-            "SELECT id, idx, start, end, state, importance, done, completed_at FROM daily_schedule_item WHERE schedule_id = ? ORDER BY idx ASC",
+            "SELECT id, idx, start, end, state, importance, progress, done, completed_at FROM daily_schedule_item WHERE schedule_id = ? ORDER BY idx ASC",
             (int(schedule_id),)
         )
         return cursor.fetchall()
@@ -259,11 +264,36 @@ class DailyScheduleStore:
         cursor = self.conn.cursor()
         cursor.execute(
             """
-            SELECT i.id, i.idx, i.start, i.end, i.state, i.importance, i.done, i.completed_at, i.schedule_id
+            SELECT i.id, i.idx, i.start, i.end, i.state, i.importance, i.progress, i.done, i.completed_at, i.schedule_id
             FROM daily_schedule_item i
             JOIN daily_schedule s ON s.id = i.schedule_id
             WHERE s.created_at = ?
             ORDER BY i.idx ASC
+            """,
+            (date_str,)
+        )
+        return cursor.fetchall()
+
+    def update_item_progress(self, item_id: int, progress: int) -> int:
+        cursor = self.conn.cursor()
+        p = max(0, min(100, int(progress)))
+        cursor.execute(
+            "UPDATE daily_schedule_item SET progress = ?, done = CASE WHEN ? >= 100 THEN 1 ELSE done END, completed_at = CASE WHEN ? >= 100 THEN ? ELSE completed_at END WHERE id = ?",
+            (p, p, p, self._today_str(), int(item_id))
+        )
+        self.conn.commit()
+        return cursor.rowcount
+
+    def list_runnable_items_by_date(self, date_str: str):
+        """返回未完成且进度<100的当日子项，按 importance DESC, idx ASC 排序"""
+        cursor = self.conn.cursor()
+        cursor.execute(
+            """
+            SELECT i.id, i.idx, i.start, i.end, i.state, i.importance, i.progress, i.done, i.completed_at, i.schedule_id
+            FROM daily_schedule_item i
+            JOIN daily_schedule s ON s.id = i.schedule_id
+            WHERE s.created_at = ? AND (i.done = 0 OR i.progress < 100)
+            ORDER BY i.importance DESC, i.idx ASC
             """,
             (date_str,)
         )

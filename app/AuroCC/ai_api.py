@@ -10,6 +10,7 @@ from config import env
 from config import bot_personality
 from api.memory_api import memory_tools
 from app.AuroCC.share_date import scheduler_service
+import json
 
 
 GF_PROMPT = bot_personality.GF_PROMPT
@@ -34,14 +35,24 @@ class AIApi:
     def __init__(self):
         self.logger = Logger("AIApi")
 
-        self.client = OpenAI(api_key=env.DEEPSEEK_API_KEY,
-                             base_url="https://api.deepseek.com")
+        self._client_cached = None  # 延迟初始化，避免在心跳时阻塞崩溃
 
         self.memory_store = memory_store  # 导入记忆数据库
         self.tools = memory_tools.MemoryStore_Tools()  # 复用工具实例
         self.scheduler = scheduler_service  # 复用全局调度器实例
 
         self.bj_tz = pytz.timezone('Asia/Shanghai')
+
+    def _client(self) -> OpenAI | None:
+        if self._client_cached is not None:
+            return self._client_cached
+        try:
+            self._client_cached = OpenAI(api_key=env.DEEPSEEK_API_KEY,
+                                         base_url="https://api.deepseek.com")
+        except Exception as e:
+            self.logger.error(f"初始化OpenAI客户端失败: {e}")
+            self._client_cached = None
+        return self._client_cached
 
     def Get_aurocc_response(self, importance: int) -> list:
         """
@@ -117,7 +128,10 @@ class AIApi:
         # print(message)
         self.logger.info("记忆组建完成")
 
-        response = self.client.chat.completions.create(
+        client = self._client()
+        if client is None:
+            return ["网络初始化失败，稍后重试哦(｡･ω･｡)"]
+        response = client.chat.completions.create(
             model="deepseek-chat",
             temperature=0.7,
             messages=message,
@@ -163,6 +177,82 @@ class AIApi:
                 "ai_msg", content=answer_json, importance=importance)  # 将AI回复存入数据库
         return answer
 
+    def Decide_schedule_progress(self, item: dict, recent_short_limit: int = 10) -> dict:
+        """
+        让AI基于上下文决定本次推进的进度增量与是否触发事件。
+        输入 item: {id, idx, start, end, state, importance, progress, done, schedule_id}
+        返回: {progress_delta:int, event:str, assistant_message:str}
+        """
+        try:
+            memories_dict = self.tools.get_memories()
+            short_ctx = memories_dict.get("short", [])[:recent_short_limit]
+        except Exception:
+            short_ctx = []
+        sched_ctx = scheduler_service.build_action_prompt_context("日程推进", action_priority=int(item.get("importance", 2)))
+        schema = {
+            "progress_delta": 10,
+            "event": "none",
+            "assistant_message": ""
+        }
+        user_prompt = (
+            "你是一个亲密且自律的赛博伴侣，现在要对对象的当前日程执行一次推进决策。\n"
+            "请基于：\n"
+            f"- 调度器上下文：\n{sched_ctx}\n"
+            f"- 当前日程项：{json.dumps(item, ensure_ascii=False)}\n"
+            f"- 近期对话(节选)：{json.dumps(short_ctx, ensure_ascii=False)}\n\n"
+            "请严格输出JSON，字段：{\"progress_delta\":int(-5..50),\"event\":oneof[none,reminder,break,focus,reschedule,complete],\"assistant_message\":str}。\n"
+            "约束：\n"
+            "- 根据对象活动重要性与时间段，决定温和推进或减少打扰。\n"
+            "- progress_delta 可为负(回滚)但不超过-5；常见为 0~20。\n"
+            "- 当认为任务完成时，可返回 event=complete，并给出简短话术。\n"
+            "- assistant_message 面向对象，应简洁温和、贴合当前活动，不要使用反引号。\n"
+        )
+        try:
+            client = self._client()
+            if client is None:
+                raise RuntimeError("OpenAI client init failed")
+            resp = client.chat.completions.create(
+                model="deepseek-chat",
+                temperature=0.4,
+                messages=[
+                    {"role": "system", "content": GF_PROMPT},
+                    {"role": "user", "content": user_prompt},
+                ],
+                max_tokens=200,
+            )
+            txt = (resp.choices[0].message.content or "").strip()
+            # 尝试修正/解析JSON
+            data = None
+            try:
+                data = json.loads(txt)
+            except Exception:
+                # 简单修补
+                if txt.startswith("```"):
+                    txt = txt.strip('`').strip()
+                    try:
+                        data = json.loads(txt)
+                    except Exception:
+                        data = None
+            if not isinstance(data, dict):
+                data = {}
+        except Exception:
+            data = {}
+        # 归一化
+        delta = data.get("progress_delta", 10)
+        try:
+            delta = int(delta)
+        except Exception:
+            delta = 10
+        if delta > 50:
+            delta = 50
+        if delta < -5:
+            delta = -5
+        event = str(data.get("event", "none")).strip().lower()
+        if event not in {"none", "reminder", "break", "focus", "reschedule", "complete"}:
+            event = "none"
+        msg = str(data.get("assistant_message", "")).strip()
+        return {"progress_delta": delta, "event": event, "assistant_message": msg}
+
     def Get_message_importance_and_add_to_memory(self, msg: str) -> int:
         """
         获取消息的importance
@@ -192,7 +282,10 @@ class AIApi:
         只需返回数字1-5"""
         importance = 1
         try:
-            response = self.client.chat.completions.create(
+            client = self._client()
+            if client is None:
+                return 1
+            response = client.chat.completions.create(
                 model="deepseek-chat",
                 messages=[{"role": "system", "content": GF_PROMPT},
                           {"role": "user", "content": importance_prompt}],
@@ -259,7 +352,10 @@ class AIApi:
         
         """
         try:
-            response = self.client.chat.completions.create(
+            client = self._client()
+            if client is None:
+                return []
+            response = client.chat.completions.create(
                 model="deepseek-chat",
                 messages=[{"role": "system", "content": GF_PROMPT},
                           {"role": "user", "content": prompt}],
@@ -288,7 +384,10 @@ class AIApi:
                 """
 
                 try:
-                    topic_response = self.client.chat.completions.create(
+                    client = self._client()
+                    if client is None:
+                        raise RuntimeError("OpenAI client init failed")
+                    topic_response = client.chat.completions.create(
                         model="deepseek-chat",
                         messages=[{"role": "system", "content": GF_PROMPT}, {
                             "role": "user", "content": topic_prompt}],

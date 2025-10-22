@@ -49,7 +49,8 @@ class SchedulerService:
         now = datetime.now(self.tz)
         now_min = now.hour * 60 + now.minute
         for row in items:
-            _id, _idx, start, end, state, importance, done, _completed_at, _schedule_id = row
+            # 返回列: id, idx, start, end, state, importance, progress, done, completed_at, schedule_id
+            _id, _idx, start, end, state, importance, progress, done, _completed_at, _schedule_id = row
             if self._is_now_in_range(str(start), str(end), now_min):
                 return {
                     "id": _id,
@@ -58,6 +59,7 @@ class SchedulerService:
                     "end": end,
                     "state": state,
                     "importance": int(importance or 3),
+                    "progress": int(progress or 0),
                     "done": bool(done),
                     "schedule_id": _schedule_id,
                 }
@@ -97,7 +99,33 @@ class SchedulerService:
         it = pd["active_item"]
         return (
             f"[调度器]\n当前时间：{now}\n"
-            f"当前日程：{it['start']}-{it['end']} {it['state']}\n"
-            f"当前活动重要性={it['importance']}；聊天优先级={chat_priority}；决策={pd['decision']}。\n"
-            f"策略：若决策为chat_soft，请以不打断当前活动为前提，给出贴合活动的关怀、提醒或轻量互动。\n"
+            f"她当前日程：{it['start']}-{it['end']} {it['state']}\n"
+            f"对象活动重要性={it['importance']}；聊天优先级={chat_priority}；决策={pd['decision']}。\n"
+            f"策略：若决策为chat_soft，请以不打断对象当前活动为前提，给出贴合对象活动的关怀、提醒或轻量互动。\n"
+        )
+
+    def build_action_prompt_context(self, action_name: str, action_priority: int) -> str:
+        """
+        将一个拟进行的动作（如“主动聊天”）以任务形式纳入调度比较，返回可注入提示词的上下文。
+        """
+        now = datetime.now(self.tz).strftime("%Y-%m-%d %H:%M")
+        pd = self.get_priority_decision(chat_priority=action_priority)
+        if not pd.get("active_item"):
+            return (
+                f"[调度器]\n当前时间：{now}\n"
+                f"计划动作：{action_name}(priority={action_priority})\n"
+                f"今日无匹配日程项，决策=allow_action。\n"
+                f"策略：可直接执行计划动作。\n"
+            )
+        it = pd["active_item"]
+        decision = pd.get("decision")
+        tip = (
+            "以不打断当前活动为前提进行轻量执行"
+            if decision == "chat_soft" else "可正常执行计划动作"
+        )
+        return (
+            f"[调度器]\n当前时间：{now}\n"
+            f"对象当前日程：{it['start']}-{it['end']} {it['state']} (importance={it['importance']})\n"
+            f"计划动作：{action_name}(priority={action_priority})；决策={decision}。\n"
+            f"策略：{tip}。\n"
         )

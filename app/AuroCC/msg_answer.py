@@ -8,6 +8,7 @@ from app.AuroCC.share_date import memory_store
 import random
 import asyncio
 from app.AuroCC.share_date import message_buffer
+from app.AuroCC.share_date import scheduler_executor
 from app.AuroCC.ai_api import AIApi
 from app.AuroCC.msg_process import MsgProcessScheduler
 import pytz
@@ -98,6 +99,11 @@ class Answer_api:
             # 检查是否需要主动聊天
             #await self.active_chat()
             asyncio.create_task(self.active_chat())
+            # 周期性调度器推进（优先循环 + AI 决策）
+            try:
+                asyncio.create_task(scheduler_executor.tick())
+            except Exception as e:
+                self.logger.error(f"调度器执行失败: {e}")
             MsgProcessScheduler(self.user_id).Start_scheduler()
             MsgProcessScheduler(self.user_id).Save_and_rebuild_indexs()
 
