@@ -86,7 +86,9 @@ class AIApi:
         else:
             self.logger.error("搜索记忆无")
 
-        memories_short = memory_tools.MemoryStore_Tools().get_memories()  # 加载最近的记忆
+        memories_dict = memory_tools.MemoryStore_Tools().get_memories()  # 加载最近的记忆（分短期/长期）
+        memories_short = memories_dict.get("short", [])
+        memories_long = memories_dict.get("long", [])
         if not memories_short:
             self.logger.error("无最近记忆")
             return []
@@ -96,8 +98,14 @@ class AIApi:
         for memory in reversed(memories):
             message.append(memory["content"])
         try:
-            for memory in reversed(memories_short[:20]):
-                message.append(memory)
+            if memories_long:
+                message.append({"role": "system", "content": "以下为长期记忆（人物设定/重要事实/长期偏好）："})
+                for memory in reversed(memories_long[:20]):
+                    message.append(memory)
+            if memories_short:
+                message.append({"role": "system", "content": "以下为近期对话上下文（最近聊天记录）："})
+                for memory in reversed(memories_short[:20]):
+                    message.append(memory)
         except Exception as e:
             self.logger.error(f"无最近记忆")
 
@@ -172,9 +180,9 @@ class AIApi:
         消息内容：{msg}
         评估标准：
         1-5:
-        1 - 一般重要
-        2 - 重要
-        3 - 很重
+        1 - 一般
+        2 - 正常
+        3 - 重要
         4 - 非常重要
         5 - 极其重要
         
@@ -206,8 +214,9 @@ class AIApi:
             list: 主动聊天的内容
         """
         # 获取最后聊天时间
-        last_chat = memory_tools.MemoryStore_Tools().get_memories()
-        if not last_chat:
+        memories_dict = memory_tools.MemoryStore_Tools().get_memories()
+        last_chat_short = memories_dict.get("short", [])
+        if not last_chat_short:
             return []
         timestamp = str(memory_tools.MemoryStore_Tools().get_memory_short_time())
 
@@ -221,20 +230,25 @@ class AIApi:
         if (datetime.now(self.bj_tz) - last_time.astimezone(self.bj_tz)).total_seconds() < random.randint(30*60, 7*60*60):  # 30分钟内聊过
             return []
 
-        # 准备主动聊天判断数据
+        # 准备主动聊天判断数据（分别提供短期/长期记忆）
         context = {
-            "last_chat": last_chat[0],
-            "memories": memory_tools.MemoryStore_Tools().get_memories(),
+            "last_chat": last_chat_short[0],
+            "short_memories": memories_dict.get("short", []),
+            "long_memories": memories_dict.get("long", []),
             "current_time": datetime.now(self.bj_tz).isoformat()
         }
-        msg = []
-        for message in reversed(context["memories"]):
-            msg.append(message)
+        msg_short = []
+        for m in reversed(context["short_memories"]):
+            msg_short.append(m)
+        msg_long = []
+        for m in reversed(context["long_memories"]):
+            msg_long.append(m)
         # 使用严格提示词判断
         prompt = f"""请根据以下条件判断是否需要主动发起聊天：
         最后聊天时间：{last_time}
         当前时间：{datetime.now(self.bj_tz)}
-        最近聊天内容：{msg[-30:]}
+        长期记忆（人物设定/重要事实/长期偏好）：{msg_long[-10:]}
+        近期聊天内容（最近对话上下文）：{msg_short[-30:]}
 
         {bot_personality.PROACTIVE_JUDGEMENT}
         
@@ -259,7 +273,8 @@ class AIApi:
                 
                 最后聊天时间：{last_time}
                 当前时间：{datetime.now(self.bj_tz)}
-                最近聊天记录：{msg[-30:]}
+                长期记忆（人物设定/重要事实/长期偏好）：{msg_long[-10:]}
+                近期聊天记录：{msg_short[-30:]}
 
                 {bot_personality.PROACTIVE_INFORMATION}
                 

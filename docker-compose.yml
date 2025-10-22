@@ -3,24 +3,26 @@ version: "3"
 services:
     napcat:
         environment:
-            - ACCOUNT=2712065523
-            - WS_ENABLE=true
+            - ACCOUNT=3552638520
+            # - WS_ENABLE=true
         ports:
             - 3001:3001
-            - 8082:8082
+            # - 8082:8082
             - 6099:6099
         container_name: napcat
+        # volumes:
+        #     - ./store/memory_store:/app/store/memory_store
         restart: always
         image: mlikiowa/napcat-docker:latest
-    app:
-        build: .
-        restart: always
-        container_name: AuroCC-app
-        volumes:
-            - ./store/memory_store:/app/store/memory_store
-        depends_on:
-            - napcat
-        image: aurocc-bot:latest
+    # app:
+    #     build: .
+    #     restart: always
+    #     container_name: AuroCC-app
+    #     volumes:
+    #         - ./store/memory_store:/app/store/memory_store
+    #     depends_on:
+    #         - napcat
+    #     image: aurocc-bot:latest
 
 
 

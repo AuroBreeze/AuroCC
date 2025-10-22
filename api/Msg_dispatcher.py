@@ -15,7 +15,7 @@ class Msg_dispatcher:
     原始消息分发处理器
     """
     async def handle_event(self, websocket, message): # 事件处理器(功能注册处)
-        await self.AuroCC(self, websocket, message)
+        await self.AuroCC(websocket, message)
     async def AuroCC(self, websocket, message):
         try:
             if isinstance(message, str):

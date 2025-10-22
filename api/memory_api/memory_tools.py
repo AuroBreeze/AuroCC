@@ -50,35 +50,32 @@ class MemoryStore_Tools:
         
         self.conn.commit()
     def get_memories(self, memory_type=None):
-        """合并查询两个数据库的记忆"""
-        results = []
+        """分别查询短期和长期记忆并分开返回"""
+        short_results = []
+        long_results = []
         cursor = self.conn.cursor()
 
         # 查询短期记忆
         query = f"SELECT content FROM user_{self.user_id}_short_memories"
         params = []
-        
         if memory_type:
             query += " WHERE memory_type = ?"
             params.append(memory_type)
-        
         query += " ORDER BY timestamp DESC"
         cursor.execute(query, params)
-        results.extend(json.loads(row[0]) for row in cursor.fetchall())
+        short_results.extend(json.loads(row[0]) for row in cursor.fetchall())
 
         # 查询长期记忆
         query = f"SELECT content FROM user_{self.user_id}_long_memories"
         params = []
-        
         if memory_type:
             query += " WHERE memory_type = ?"
             params.append(memory_type)
-        
         query += " ORDER BY importance DESC, timestamp DESC"
         cursor.execute(query, params)
-        results.extend(json.loads(row[0]) for row in cursor.fetchall())
+        long_results.extend(json.loads(row[0]) for row in cursor.fetchall())
 
-        return results
+        return {"short": short_results, "long": long_results}
     def get_memory_short_time(self):
         """
         查询最近聊天的时间点
