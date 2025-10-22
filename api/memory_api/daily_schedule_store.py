@@ -117,6 +117,10 @@ class DailyScheduleStore:
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_daily_schedule_item_schedule_id ON daily_schedule_item(schedule_id)")
         except Exception:
             pass
+        try:
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_daily_schedule_item_schedule_idx ON daily_schedule_item(schedule_id, idx)")
+        except Exception:
+            pass
         self.conn.commit()
     
     def _today_str(self):
@@ -140,6 +144,13 @@ class DailyScheduleStore:
         self.conn.commit()
         self.logger.info(f"添加日程成功: {content}")
         return cursor.lastrowid # 返回插入的行ID
+
+    def delete_schedule(self, schedule_id: int) -> int:
+        """删除主表记录，依赖 ON DELETE CASCADE 自动删除子表项。返回删除行数。"""
+        cursor = self.conn.cursor()
+        cursor.execute("DELETE FROM daily_schedule WHERE id = ?", (int(schedule_id),))
+        self.conn.commit()
+        return cursor.rowcount
     
     def get_all_daily_schedule(self,limit=10): # 获取日程
         cursor = self.conn.cursor()
@@ -285,3 +296,87 @@ class DailyScheduleStore:
         )
         self.conn.commit()
         return total, done, ratio
+
+    # ===== 只读接口：按日期返回主表聚合统计 =====
+    def get_stats_by_date(self, date_str: str):
+        """返回 (total_count, done_count, completion_ratio)；无则返回 (0,0,0.0)。"""
+        cursor = self.conn.cursor()
+        cursor.execute(
+            """
+            SELECT total_count, done_count, completion_ratio
+            FROM daily_schedule
+            WHERE created_at = ? OR created_at LIKE ? || '%'
+            ORDER BY id DESC LIMIT 1
+            """,
+            (date_str, date_str)
+        )
+        row = cursor.fetchone()
+        if not row:
+            return 0, 0, 0.0
+        tc, dc, cr = row
+        return int(tc or 0), int(dc or 0), float(cr or 0.0)
+
+    # ===== 高层封装：原子化创建日程及子项 =====
+    def create_schedule_with_items(self, content_json: str, items: list[dict]) -> int:
+        """
+        在单一事务中创建日程主记录、写入子项并回填统计。
+        返回新建 schedule_id。
+        """
+        try:
+            cursor = self.conn.cursor()
+            # 开始事务
+            cursor.execute("BEGIN")
+            # 插入主表
+            created_at = self._today_str()
+            cursor.execute(
+                "INSERT INTO daily_schedule (content, status, created_at, total_count, done_count, completion_ratio, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (content_json, 0, created_at, 0, 0, 0.0, created_at)
+            )
+            schedule_id = cursor.lastrowid
+            # 插入子表
+            for idx, it in enumerate(items or []):
+                cursor.execute(
+                    """
+                    INSERT INTO daily_schedule_item (schedule_id, idx, start, end, state, importance, done, completed_at, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        int(schedule_id),
+                        int(idx),
+                        str(it.get('start', '')),
+                        str(it.get('end', '')),
+                        str(it.get('state', '')),
+                        (lambda v: (
+                            (lambda parsed: max(1, min(5, parsed)))(
+                                (lambda s: (3 if s is None or s == '' else (int(s) if str(s).strip('-').isdigit() else 3)))(v)
+                            )
+                        ))(it.get('importance', 3)),
+                        1 if bool(it.get('done')) else 0,
+                        created_at if bool(it.get('done')) else None,
+                        created_at,
+                    )
+                )
+            # 回填统计
+            cursor.execute(
+                "SELECT COUNT(1), SUM(done) FROM daily_schedule_item WHERE schedule_id = ?",
+                (int(schedule_id),)
+            )
+            row = cursor.fetchone()
+            total = int(row[0] or 0)
+            done = int(row[1] or 0)
+            ratio = float(done / total) if total > 0 else 0.0
+            updated_at = datetime.now(self.bj_tz).isoformat()
+            cursor.execute(
+                "UPDATE daily_schedule SET total_count = ?, done_count = ?, completion_ratio = ?, updated_at = ? WHERE id = ?",
+                (total, done, ratio, updated_at, int(schedule_id))
+            )
+            # 提交
+            self.conn.commit()
+            return schedule_id
+        except Exception as e:
+            self.logger.error(f"create_schedule_with_items 失败，回滚: {e}")
+            try:
+                self.conn.rollback()
+            except Exception:
+                pass
+            raise

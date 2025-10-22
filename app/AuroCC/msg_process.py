@@ -8,6 +8,7 @@ from config import bot_personality
 from openai import OpenAI
 from api.memory_api import memory_tools
 import re
+from app.AuroCC.services.schedule_service import ScheduleService
 
 
 class TimingProcess:
@@ -15,6 +16,7 @@ class TimingProcess:
         self.bj_tz = pytz.timezone(env.TIMEZONE)
         self.memory_store = memory_store
         self.schedule_store = daily_schedule_store
+        self.schedule_service = ScheduleService(self.schedule_store)
 
         self.client = OpenAI(api_key=env.DEEPSEEK_API_KEY,
                              base_url="https://api.deepseek.com")
@@ -198,17 +200,9 @@ class TimingProcess:
 
             self.logger.info("虚拟日程创建成功")
             try:
-                schedule_id = self.schedule_store.add_daily_schedule(payload)
-                # 将条目写入子表并回填统计
-                try:
-                    items = obj.get("schedule", []) if isinstance(obj, dict) else []
-                    if items:
-                        self.schedule_store.add_daily_schedule_items(schedule_id, items)
-                        total, done, ratio = self.schedule_store.recalc_schedule_stats(schedule_id)
-                        self.logger.info(f"子项入库完成，总数={total}, 完成={done}, 完成率={ratio:.2f}")
-                except Exception as ie:
-                    self.logger.error(f"子项入库或统计失败: {ie}")
-                self.logger.info(f"日程已保存，ID={schedule_id}")
+                items = obj.get("schedule", []) if isinstance(obj, dict) else []
+                schedule_id = self.schedule_service.create_today_schedule(payload, items)
+                self.logger.info(f"日程已保存（原子化），ID={schedule_id}")
             except Exception as e:
                 self.logger.error(f"保存日程失败: {e}")
             return payload
