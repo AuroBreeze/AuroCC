@@ -37,7 +37,7 @@ class AIApi:
                              base_url="https://api.deepseek.com")
 
         self.memory_store = memory_store  # 导入记忆数据库
-        self.memory_store.load_indexes()  # 加载索引
+        self.tools = memory_tools.MemoryStore_Tools()  # 复用工具实例
 
         self.bj_tz = pytz.timezone('Asia/Shanghai')
 
@@ -53,28 +53,18 @@ class AIApi:
         try:
             self.memory_store.load_indexes()  # 加载索引
             self.logger.info("加载索引成功")
-            try:
-                qurey_text = str(
-                    #self.memory_store.get_memory_short()
-                    memory_tools.MemoryStore_Tools().get_memory_short()
-                    )  # 获取刚刚发送的对话内容
-                if not qurey_text:  # 数据库为空时初始化第一条记录
-                    self.memory_store.add_memory("system_msg", {
-                        "content": "系统初始化",
-                        "importance": 0
-                    })
-                    qurey_text = str(
-                        #self.memory_store.get_memory_short()
-                        memory_tools.MemoryStore_Tools().get_memory_short()
-                        )
-                self.logger.info(f"获取最近对话内容: {qurey_text}")
-            except:
-                qurey_text = ""
-                self.logger.error("获取最近对话内容失败")
+            qurey_text = str(self.tools.get_memory_short() or "")
+            if not qurey_text:  # 数据库为空时初始化第一条记录
+                self.memory_store.add_memory("system_msg", {
+                    "content": "系统初始化",
+                    "importance": 0
+                })
+                qurey_text = str(self.tools.get_memory_short() or "")
+            self.logger.info(f"获取最近对话内容: {qurey_text}")
         except Exception as e:
             self.logger.error("无法加载索引")
             self.logger.error("错误信息: " + str(e))
-            qurey_text = "" # 未定义情况的处理
+            qurey_text = ""  # 未定义情况的处理
 
         # TODO : 要动态调整top_k的数值,数据少的时候,会因为索引过少而搜索不到结果,导致报错
         memories = self.memory_store.search_memories(query_text=qurey_text, top_k=5)  # 获取对话的相关记忆
@@ -86,7 +76,7 @@ class AIApi:
         else:
             self.logger.error("搜索记忆无")
 
-        memories_dict = memory_tools.MemoryStore_Tools().get_memories()  # 加载最近的记忆（分短期/长期）
+        memories_dict = self.tools.get_memories()  # 加载最近的记忆（分短期/长期）
         memories_short = memories_dict.get("short", [])
         memories_long = memories_dict.get("long", [])
         if not memories_short:
@@ -98,19 +88,26 @@ class AIApi:
         for memory in reversed(memories):
             message.append(memory["content"])
         try:
+            LONG_MAX = 20
+            SHORT_MAX = 20
             if memories_long:
                 message.append({"role": "system", "content": "以下为长期记忆（人物设定/重要事实/长期偏好）："})
-                for memory in reversed(memories_long[:20]):
+                for memory in reversed(memories_long[:LONG_MAX]):
                     message.append(memory)
             if memories_short:
                 message.append({"role": "system", "content": "以下为近期对话上下文（最近聊天记录）："})
-                for memory in reversed(memories_short[:20]):
+                for memory in reversed(memories_short[:SHORT_MAX]):
                     message.append(memory)
         except Exception as e:
             self.logger.error(f"无最近记忆")
 
         # 将最近用户发送的消息放到列表最下面，以便ai进行回复。
-        message.append(ast.literal_eval(qurey_text))
+        try:
+            message.append(ast.literal_eval(qurey_text))
+        except Exception:
+            # 回退：如果无法解析，则以原字符串追加
+            if qurey_text:
+                message.append({"role": "user", "content": qurey_text})
         # print(message)
         self.logger.info("记忆组建完成")
 
@@ -214,7 +211,7 @@ class AIApi:
             list: 主动聊天的内容
         """
         # 获取最后聊天时间
-        memories_dict = memory_tools.MemoryStore_Tools().get_memories()
+        memories_dict = self.tools.get_memories()
         last_chat_short = memories_dict.get("short", [])
         if not last_chat_short:
             return []
@@ -237,12 +234,8 @@ class AIApi:
             "long_memories": memories_dict.get("long", []),
             "current_time": datetime.now(self.bj_tz).isoformat()
         }
-        msg_short = []
-        for m in reversed(context["short_memories"]):
-            msg_short.append(m)
-        msg_long = []
-        for m in reversed(context["long_memories"]):
-            msg_long.append(m)
+        msg_short = list(reversed(context["short_memories"]))
+        msg_long = list(reversed(context["long_memories"]))
         # 使用严格提示词判断
         prompt = f"""请根据以下条件判断是否需要主动发起聊天：
         最后聊天时间：{last_time}
@@ -265,7 +258,7 @@ class AIApi:
             self.logger.info(f"主动聊天判断结果: {should_chat}")
             if should_chat:
 
-                self.logger.info(f"话题基于记忆{msg[-5:]}")
+                self.logger.info(f"话题基于记忆{(msg_long + msg_short)[:5]}")
                 # 生成个性化开场白
                 topic_prompt = f"""基于以下记忆生成一个自然的聊天开场白：
                 注意：
