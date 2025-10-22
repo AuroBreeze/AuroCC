@@ -9,6 +9,7 @@ import ast
 from config import env
 from config import bot_personality
 from api.memory_api import memory_tools
+from app.AuroCC.share_date import scheduler_service
 
 
 GF_PROMPT = bot_personality.GF_PROMPT
@@ -38,6 +39,7 @@ class AIApi:
 
         self.memory_store = memory_store  # 导入记忆数据库
         self.tools = memory_tools.MemoryStore_Tools()  # 复用工具实例
+        self.scheduler = scheduler_service  # 复用全局调度器实例
 
         self.bj_tz = pytz.timezone('Asia/Shanghai')
 
@@ -98,6 +100,10 @@ class AIApi:
                 message.append({"role": "system", "content": "以下为近期对话上下文（最近聊天记录）："})
                 for memory in reversed(memories_short[:SHORT_MAX]):
                     message.append(memory)
+            # 注入调度器上下文（优先级对比，聊天优先级=3）
+            sched_ctx = self.scheduler.build_prompt_context(chat_priority=3)
+            self.logger.info(f"调度器上下文: {sched_ctx}")
+            message.append({"role": "system", "content": sched_ctx})
         except Exception as e:
             self.logger.error(f"无最近记忆")
 
@@ -237,11 +243,17 @@ class AIApi:
         msg_short = list(reversed(context["short_memories"]))
         msg_long = list(reversed(context["long_memories"]))
         # 使用严格提示词判断
+        # 调度器上下文（用于主动聊天判断）
+        sched_ctx = self.scheduler.build_prompt_context(chat_priority=3)
+        self.logger.debug(f"调度器上下文：{sched_ctx}")
+
         prompt = f"""请根据以下条件判断是否需要主动发起聊天：
         最后聊天时间：{last_time}
         当前时间：{datetime.now(self.bj_tz)}
         长期记忆（人物设定/重要事实/长期偏好）：{msg_long[-10:]}
         近期聊天内容（最近对话上下文）：{msg_short[-30:]}
+
+        调度器上下文：\n{sched_ctx}
 
         {bot_personality.PROACTIVE_JUDGEMENT}
         
@@ -260,7 +272,7 @@ class AIApi:
 
                 self.logger.info(f"话题基于记忆{(msg_long + msg_short)[:5]}")
                 # 生成个性化开场白
-                topic_prompt = f"""基于以下记忆生成一个自然的聊天开场白：
+                topic_prompt = f"""基于以下记忆与调度器上下文，生成一个自然的聊天开场白：
                 注意：
                     要关注聊天的时间顺序。
                 
@@ -268,6 +280,8 @@ class AIApi:
                 当前时间：{datetime.now(self.bj_tz)}
                 长期记忆（人物设定/重要事实/长期偏好）：{msg_long[-10:]}
                 近期聊天记录：{msg_short[-30:]}
+
+                调度器上下文：\n{sched_ctx}
 
                 {bot_personality.PROACTIVE_INFORMATION}
                 

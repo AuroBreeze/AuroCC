@@ -7,3 +7,9 @@ from api.memory_api.daily_schedule_store import DailyScheduleStore
 from config import env
 memory_store = MemoryStore(env.QQ_ADMIN)
 daily_schedule_store = DailyScheduleStore()
+from app.AuroCC.services.schedule_service import ScheduleService
+from app.AuroCC.services.scheduler_service import SchedulerService
+
+# 统一在此处实例化服务，供全局复用
+schedule_service = ScheduleService(daily_schedule_store)
+scheduler_service = SchedulerService(schedule_service)
